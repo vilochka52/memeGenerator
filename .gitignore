@@ -1,0 +1,11 @@
+# Android / IntelliJ / Gradle files
+.gradle/
+.idea/
+build/
+captures/
+.DS_Store
+local.properties
+*.iml
+*.apk
+*.aab
+.cxx/

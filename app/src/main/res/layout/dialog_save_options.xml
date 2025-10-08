@@ -1,0 +1,32 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:padding="24dp"
+    android:orientation="vertical"
+    android:background="@color/btn_bg">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Выбери способ сохранения"
+        android:textColor="@color/white"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp"/>
+
+    <Button
+        android:id="@+id/btnSaveGallery"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="В галерею"
+        android:backgroundTint="@color/btn_bg"
+        android:textColor="@color/white"/>
+
+    <Button
+        android:id="@+id/btnSaveFiles"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="В файлы"
+        android:backgroundTint="@color/btn_bg"
+        android:textColor="@color/white"
+        android:layout_marginTop="8dp"/>
+</LinearLayout>
