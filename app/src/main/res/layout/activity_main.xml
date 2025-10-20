@@ -1,118 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#141017">
+    android:layout_height="match_parent">
 
     <com.example.memegenerator.MemeView
         android:id="@+id/memeView"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:adjustViewBounds="true"
-        android:background="#111"/>
+        android:background="#222222"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/bottomBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
 
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
         android:padding="12dp"
-        android:background="#1C1821"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:background="?attr/colorSurface"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <LinearLayout
-            android:layout_width="match_parent"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnPick"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:layout_weight="1"
+            android:text="@string/pick"/>
 
-            <EditText
-                android:id="@+id/editText"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:hint="Текст"
-                android:textColor="#FFFFFF"
-                android:textColorHint="#80FFFFFF"
-                android:background="#2D2A33"
-                android:padding="12dp" />
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="0dp"/>
 
-            <Button
-                android:id="@+id/btnAddText"
-                android:layout_width="56dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="8dp"
-                android:background="#3A3642"
-                android:text="✓"
-                android:textColor="#FFFFFF"
-                android:textSize="20sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddText"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="8dp">
+            android:layout_weight="1"
+            android:text="@string/add_text"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"/>
 
-            <EditText
-                android:id="@+id/sizeInput"
-                android:layout_width="88dp"
-                android:layout_height="48dp"
-                android:hint="px"
-                android:textColor="#FFFFFF"
-                android:textColorHint="#80FFFFFF"
-                android:inputType="number"
-                android:gravity="center"
-                android:background="#2D2A33"
-                android:padding="12dp" />
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="0dp"/>
 
-            <Spinner
-                android:id="@+id/fontSpinner"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:background="#2D2A33"
-                android:popupTheme="@style/ThemeOverlay.Material3.Dark" />
-
-            <Button
-                android:id="@+id/deleteBtn"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:text="🗑"
-                android:textSize="16sp"
-                android:layout_marginStart="8dp"
-                android:background="#8B1E2D"
-                android:textColor="#FFFFFF" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSave"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="8dp">
-
-            <Button
-                android:id="@+id/btnSelectImage"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:text="Выбрать фото"
-                android:background="#3A3642"
-                android:textColor="#FFFFFF" />
-
-            <Button
-                android:id="@+id/saveBtn"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:text="Сохранить"
-                android:background="#3A3642"
-                android:textColor="#FFFFFF" />
-        </LinearLayout>
+            android:layout_weight="1"
+            android:text="@string/save"/>
     </LinearLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

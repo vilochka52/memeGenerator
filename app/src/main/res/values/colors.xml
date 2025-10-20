@@ -1,6 +1,8 @@
 <resources>
-    <color name="bg_dark">#141017</color>
-    <color name="btn_bg">#2D2A33</color>
+    <color name="md_theme_primary">#6750A4</color>
+    <color name="md_theme_onPrimary">#FFFFFFFF</color>
+    <color name="md_theme_surface">#121212</color>
+    <color name="md_theme_onSurface">#FFFFFFFF</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="hint">#80FFFFFF</color>
+    <color name="btn_bg">#6750A4</color>
 </resources>

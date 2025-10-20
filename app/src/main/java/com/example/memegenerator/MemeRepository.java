@@ -5,24 +5,43 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Environment;
 import android.provider.MediaStore;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import java.io.OutputStream;
 
-public class MemeRepository {
-    public Uri saveToPictures(Context ctx, Bitmap bitmap, String displayName) throws Exception {
-        ContentResolver resolver = ctx.getContentResolver();
+public final class MemeRepository {
+
+    private MemeRepository() {}
+
+    @Nullable
+    public static Uri saveBitmapToGallery(@NonNull Context ctx,
+                                          @NonNull Bitmap bmp,
+                                          @NonNull String fileName) {
+        ContentResolver cr = ctx.getContentResolver();
         ContentValues values = new ContentValues();
-        values.put(MediaStore.MediaColumns.DISPLAY_NAME, displayName);
-        values.put(MediaStore.MediaColumns.MIME_TYPE, "image/png");
-        values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MemeGenerator");
-        Uri collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
-        Uri item = resolver.insert(collection, values);
-        if (item == null) return null;
-        try (OutputStream os = resolver.openOutputStream(item)) {
-            if (os == null) return null;
-            boolean ok = bitmap.compress(Bitmap.CompressFormat.PNG, 100, os);
-            if (!ok) return null;
+        values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+        values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MemeGenerator");
+        values.put(MediaStore.Images.Media.IS_PENDING, 1);
+
+        Uri uri = cr.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+        if (uri == null) return null;
+
+        try (OutputStream out = cr.openOutputStream(uri)) {
+            if (out == null) return null;
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        } finally {
+            ContentValues fin = new ContentValues();
+            fin.put(MediaStore.Images.Media.IS_PENDING, 0);
+            cr.update(uri, fin, null, null);
         }
-        return item;
+        return uri;
     }
 }

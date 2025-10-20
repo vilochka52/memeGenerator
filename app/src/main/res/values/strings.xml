@@ -1,8 +1,6 @@
 <resources>
     <string name="app_name">Meme Generator</string>
-    <string name="select_image">Выбрать изображение</string>
-    <string name="generate_meme">Сгенерировать мем</string>
-    <string name="save_meme">Сохранить мем</string>
-    <string name="top_text_hint">Текст сверху</string>
-    <string name="bottom_text_hint">Текст снизу</string>
+    <string name="pick">Выбрать фото</string>
+    <string name="add_text">Добавить текст</string>
+    <string name="save">Сохранить</string>
 </resources>

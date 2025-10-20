@@ -1,39 +1,45 @@
 package com.example.memegenerator;
 
-import android.content.ContentResolver;
-import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.net.Uri;
+import android.graphics.Color;
+import android.graphics.Typeface;
+
+import androidx.annotation.NonNull;
+import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
-import java.io.InputStream;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 public class MemeViewModel extends ViewModel {
-    public final MutableLiveData<Bitmap> previewBitmap = new MutableLiveData<>();
-    public final MutableLiveData<String> toastEvent = new MutableLiveData<>();
-    private Bitmap sourceBitmap;
-    private final MemeRepository repository = new MemeRepository();
 
-    public void loadSourceBitmap(ContentResolver resolver, Uri uri) {
-        try (InputStream in = resolver.openInputStream(uri)) {
-            Bitmap decoded = BitmapFactory.decodeStream(in);
-            sourceBitmap = decoded;
-            previewBitmap.postValue(decoded);
-            toastEvent.postValue("Изображение загружено");
-        } catch (Exception e) {
-            toastEvent.postValue("Не удалось загрузить изображение");
+    private final MutableLiveData<List<TextItem>> textItems = new MutableLiveData<>(new ArrayList<>());
+
+    public LiveData<List<TextItem>> getTextItems() { return textItems; }
+
+    public void addText(@NonNull String text, float sizeSp) {
+        List<TextItem> cur = new ArrayList<>(Objects.requireNonNull(textItems.getValue()));
+        cur.add(new TextItem(text, sizeSp, 80f, 120f, Typeface.BOLD, Color.WHITE));
+        textItems.setValue(cur);
+    }
+
+    /** Добавляет текст в заданные координаты (обычно центр view). */
+    public void addTextCentered(@NonNull String text, float sizeSp, float x, float y) {
+        List<TextItem> cur = new ArrayList<>(Objects.requireNonNull(textItems.getValue()));
+        cur.add(new TextItem(text, sizeSp, x, y, Typeface.BOLD, Color.WHITE));
+        textItems.setValue(cur);
+    }
+
+    public void updateItem(int index, @NonNull TextItem item) {
+        List<TextItem> cur = new ArrayList<>(Objects.requireNonNull(textItems.getValue()));
+        if (index >= 0 && index < cur.size()) {
+            cur.set(index, item);
+            textItems.setValue(cur);
         }
     }
 
-    public void saveMeme(Context ctx, Bitmap bmp) {
-        String name = "meme_" + System.currentTimeMillis() + ".png";
-        try {
-            Uri uri = repository.saveToPictures(ctx, bmp, name);
-            if (uri != null) toastEvent.postValue("Сохранено: Pictures/MemeGenerator/" + name);
-            else toastEvent.postValue("Не удалось сохранить");
-        } catch (Exception e) {
-            toastEvent.postValue("Ошибка сохранения");
-        }
+    public void replaceAll(@NonNull List<TextItem> newItems) {
+        textItems.setValue(new ArrayList<>(newItems));
     }
 }

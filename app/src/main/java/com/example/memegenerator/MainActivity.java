@@ -1,56 +1,186 @@
 package com.example.memegenerator;
 
+import android.graphics.Bitmap;
+import android.graphics.ImageDecoder;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
+import android.text.InputType;
 import android.widget.EditText;
-import android.widget.Spinner;
+import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.ViewModelProvider;
+
+import com.example.memegenerator.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
 
-    private MemeView memeView;
-    private EditText editText;
-    private Button btnAddText, btnSelectImage;
-    private Spinner fontSpinner;
-    private ActivityResultLauncher<String> imagePicker;
+    private ActivityMainBinding binding;
+    private MemeViewModel viewModel;
+    private ActivityResultLauncher<String> pickImageLauncher;
+
+    // ⚠️ НИКАКИХ инициализаций, которые требуют Context, вне onCreate() !
+    public MainActivity() {
+        super();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
 
-        memeView = findViewById(R.id.memeView);
-        editText = findViewById(R.id.editText);
-        btnAddText = findViewById(R.id.btnAddText);
-        btnSelectImage = findViewById(R.id.btnSelectImage);
-        fontSpinner = findViewById(R.id.fontSpinner);
+        binding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
 
-        imagePicker = registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
-            if (uri != null) memeView.setImageUri(uri);
+        viewModel = new ViewModelProvider(this).get(MemeViewModel.class);
+        viewModel.getTextItems().observe(this, items -> binding.memeView.setTextItems(items));
+
+        // двойной тап по тексту -> диалог
+        binding.memeView.setOnTextEditRequestListener(this::showEditDialog);
+        // по завершению перетаскивания — сохранить координаты в VM (исправляет "телепорт")
+        binding.memeView.setOnTextMovedListener((index, item) -> viewModel.updateItem(index, item));
+
+        // Пикер фото
+        pickImageLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                this::onImagePicked
+        );
+
+        binding.btnPick.setOnClickListener(v -> ensurePhotoPermissionThenPick());
+
+        binding.btnAddText.setOnClickListener(v -> {
+            float x = Math.max(40f, binding.memeView.getWidth() * 0.5f);
+            float y = Math.max(80f,  binding.memeView.getHeight() * 0.35f);
+            viewModel.addTextCentered("Ваш текст", 32f, x, y);
+            Toast.makeText(this, "Двойной тап по тексту — редактировать", Toast.LENGTH_SHORT).show();
         });
 
-        btnSelectImage.setOnClickListener(v -> imagePicker.launch("image/*"));
+        binding.btnSave.setOnClickListener(v -> saveCurrentMeme());
+    }
 
-        btnAddText.setOnClickListener(v -> {
-            String text = editText.getText().toString().trim();
-            if (!text.isEmpty()) memeView.addTextBlock(text);
-        });
+    private void onImagePicked(Uri uri) {
+        if (uri == null) {
+            Toast.makeText(this, "Изображение не выбрано", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-        ArrayAdapter<CharSequence> fontAdapter = ArrayAdapter.createFromResource(this,
-                R.array.fonts_array, android.R.layout.simple_spinner_item);
-        fontAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        fontSpinner.setAdapter(fontAdapter);
+        // Размер для семплинга: берём размеры канвы (если она ещё 0 — подставим экран)
+        int tw = binding.memeView.getWidth();
+        int th = binding.memeView.getHeight();
+        if (tw <= 0 || th <= 0) {
+            var dm = getResources().getDisplayMetrics();
+            tw = dm.widthPixels;
+            th = dm.heightPixels;
+        }
 
-        fontSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view, int pos, long id) {
-                memeView.setFontByIndex(pos);
+        Bitmap bmp = ImageLoader.loadBitmapFromUri(this, uri, tw, th);
+        if (bmp == null) {
+            Toast.makeText(this, "Не удалось загрузить изображение", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        binding.memeView.setBackgroundBitmap(bmp);
+    }
+
+    private void saveCurrentMeme() {
+        Bitmap out = binding.memeView.exportToBitmap();
+        new Thread(() -> {
+            Uri saved = MemeRepository.saveBitmapToGallery(
+                    this, out, "meme_" + System.currentTimeMillis() + ".png");
+            runOnUiThread(() -> {
+                if (saved != null) Toast.makeText(this, "Сохранено в Галерею", Toast.LENGTH_SHORT).show();
+                else Toast.makeText(this, "Не удалось сохранить", Toast.LENGTH_SHORT).show();
+            });
+        }).start();
+    }
+
+    private void showEditDialog(int index, @NonNull TextItem item) {
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        container.setPadding(pad, pad, pad, pad);
+
+        EditText textEt = new EditText(this);
+        textEt.setHint("Текст");
+        textEt.setText(item.text);
+        textEt.setSingleLine(false);
+        textEt.setMinLines(2);
+        textEt.setInputType(
+                InputType.TYPE_CLASS_TEXT
+                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                        | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        );
+        container.addView(textEt);
+
+        EditText sizeEt = new EditText(this);
+        sizeEt.setHint("Размер, sp");
+        sizeEt.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        sizeEt.setText(String.valueOf(item.textSizeSp));
+        container.addView(sizeEt);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Редактировать текст")
+                .setView(container)
+                .setPositiveButton("OK", (d, w) -> {
+                    String newText = textEt.getText().toString();
+                    float newSize;
+                    try { newSize = Float.parseFloat(sizeEt.getText().toString()); }
+                    catch (Exception ex) { newSize = item.textSizeSp; }
+                    TextItem updated = new TextItem(
+                            newText,
+                            Math.max(8f, newSize),
+                            item.x, item.y,
+                            item.typefaceStyle,
+                            item.color
+                    );
+                    viewModel.updateItem(index, updated);
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+    private final ActivityResultLauncher<String[]> permissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+                boolean granted = false;
+                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    Boolean ok = result.getOrDefault(android.Manifest.permission.READ_MEDIA_IMAGES, false);
+                    granted = ok != null && ok;
+                } else if (android.os.Build.VERSION.SDK_INT >= 23) {
+                    Boolean ok = result.getOrDefault(android.Manifest.permission.READ_EXTERNAL_STORAGE, false);
+                    granted = ok != null && ok;
+                } else {
+                    granted = true; // на <23 уже выдано при установке
+                }
+                if (granted) {
+                    pickImageLauncher.launch("image/*");
+                } else {
+                    Toast.makeText(this, "Нет разрешения на чтение изображений", Toast.LENGTH_SHORT).show();
+                }
+            });
+
+    private void ensurePhotoPermissionThenPick() {
+        if (android.os.Build.VERSION.SDK_INT < 23) {
+            // старые Android — разрешение уже есть
+            pickImageLauncher.launch("image/*");
+            return;
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(android.Manifest.permission.READ_MEDIA_IMAGES)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pickImageLauncher.launch("image/*");
+            } else {
+                permissionLauncher.launch(new String[]{android.Manifest.permission.READ_MEDIA_IMAGES});
             }
-            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-        });
+        } else {
+            if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pickImageLauncher.launch("image/*");
+            } else {
+                permissionLauncher.launch(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE});
+            }
+        }
     }
 }
