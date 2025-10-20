@@ -20,44 +20,49 @@
         android:id="@+id/bottomBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:padding="12dp"
+        android:background="?attr/colorSurface"
         android:gravity="center"
         android:orientation="horizontal"
-        android:background="?attr/colorSurface"
+        android:padding="12dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnPick"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="55dp"
             android:layout_weight="1"
-            android:text="@string/pick"/>
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:text="@string/pick" />
 
         <Space
             android:layout_width="8dp"
-            android:layout_height="0dp"/>
+            android:layout_height="0dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddText"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="55dp"
             android:layout_weight="1"
-            android:text="@string/add_text"
             android:insetLeft="0dp"
-            android:insetRight="0dp"/>
+            android:insetRight="0dp"
+            android:text="@string/add_text" />
 
         <Space
             android:layout_width="8dp"
-            android:layout_height="0dp"/>
+            android:layout_height="0dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSave"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="55dp"
             android:layout_weight="1"
-            android:text="@string/save"/>
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:text="@string/save" />
     </LinearLayout>
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>

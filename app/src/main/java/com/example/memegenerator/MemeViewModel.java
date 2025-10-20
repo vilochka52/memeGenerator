@@ -22,9 +22,17 @@ public class MemeViewModel extends ViewModel {
         List<TextItem> cur = new ArrayList<>(Objects.requireNonNull(textItems.getValue()));
         cur.add(new TextItem(text, sizeSp, 80f, 120f, Typeface.BOLD, Color.WHITE));
         textItems.setValue(cur);
+    }public void removeItem(int index) {
+        List<TextItem> cur = textItems.getValue();
+        if (cur == null || index < 0 || index >= cur.size()) return;
+
+        // создаём копию, чтобы триггернуть LiveData
+        List<TextItem> copy = new ArrayList<>(cur);
+        copy.remove(index);
+        textItems.setValue(copy); // мы на UI-потоке
     }
 
-    /** Добавляет текст в заданные координаты (обычно центр view). */
+    
     public void addTextCentered(@NonNull String text, float sizeSp, float x, float y) {
         List<TextItem> cur = new ArrayList<>(Objects.requireNonNull(textItems.getValue()));
         cur.add(new TextItem(text, sizeSp, x, y, Typeface.BOLD, Color.WHITE));

@@ -1,9 +1,9 @@
 package com.example.memegenerator;
+import android.view.View;
+import android.widget.Button;
 
 import android.graphics.Bitmap;
-import android.graphics.ImageDecoder;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.widget.EditText;
@@ -20,6 +20,9 @@ import androidx.lifecycle.ViewModelProvider;
 import com.example.memegenerator.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
+    @androidx.annotation.Nullable
+    private AlertDialog editDialog;
+
 
     private ActivityMainBinding binding;
     private MemeViewModel viewModel;
@@ -83,7 +86,7 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Не удалось загрузить изображение", Toast.LENGTH_SHORT).show();
             return;
         }
-        binding.memeView.setBackgroundBitmap(bmp);
+        binding.memeView.addImageBitmap(bmp);
     }
 
     private void saveCurrentMeme() {
@@ -99,6 +102,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showEditDialog(int index, @NonNull TextItem item) {
+        // Если уже открыт диалог редактирования – просто игнорируем повторный дабл-тап,
+        // чтобы не пытаться добавить тот же view ещё раз.
+        if (editDialog != null && editDialog.isShowing()) return;
+
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (16 * getResources().getDisplayMetrics().density);
@@ -122,7 +129,48 @@ public class MainActivity extends AppCompatActivity {
         sizeEt.setText(String.valueOf(item.textSizeSp));
         container.addView(sizeEt);
 
-        new AlertDialog.Builder(this)
+        // --- блок выравнивания, если уже добавлял align ---
+        // Можно убрать этот блок, если он у тебя уже есть в текущей версии showEditDialog
+        LinearLayout alignRow = new LinearLayout(this);
+        alignRow.setOrientation(LinearLayout.HORIZONTAL);
+        alignRow.setPadding(0, pad / 2, 0, 0);
+
+        android.widget.Button leftBtn = new android.widget.Button(this);
+        leftBtn.setText("←");
+        android.widget.Button centerBtn = new android.widget.Button(this);
+        centerBtn.setText("↔");
+        android.widget.Button rightBtn = new android.widget.Button(this);
+        rightBtn.setText("→");
+
+        int btnPad = (int) (8 * getResources().getDisplayMetrics().density);
+        leftBtn.setPadding(btnPad, btnPad, btnPad, btnPad);
+        centerBtn.setPadding(btnPad, btnPad, btnPad, btnPad);
+        rightBtn.setPadding(btnPad, btnPad, btnPad, btnPad);
+
+        alignRow.addView(leftBtn);
+        alignRow.addView(centerBtn);
+        alignRow.addView(rightBtn);
+        container.addView(alignRow);
+
+        final int[] selectedAlign = { item.align };
+        Runnable refreshAlignUI = () -> {
+            leftBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_LEFT);
+            centerBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_CENTER);
+            rightBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_RIGHT);
+        };
+        android.view.View.OnClickListener alignClick = v -> {
+            if (v == leftBtn) selectedAlign[0] = TextItem.ALIGN_LEFT;
+            else if (v == centerBtn) selectedAlign[0] = TextItem.ALIGN_CENTER;
+            else if (v == rightBtn) selectedAlign[0] = TextItem.ALIGN_RIGHT;
+            refreshAlignUI.run();
+        };
+        leftBtn.setOnClickListener(alignClick);
+        centerBtn.setOnClickListener(alignClick);
+        rightBtn.setOnClickListener(alignClick);
+        refreshAlignUI.run();
+        // --- конец блока выравнивания ---
+
+        AlertDialog.Builder b = new AlertDialog.Builder(this)
                 .setTitle("Редактировать текст")
                 .setView(container)
                 .setPositiveButton("OK", (d, w) -> {
@@ -130,18 +178,26 @@ public class MainActivity extends AppCompatActivity {
                     float newSize;
                     try { newSize = Float.parseFloat(sizeEt.getText().toString()); }
                     catch (Exception ex) { newSize = item.textSizeSp; }
+
                     TextItem updated = new TextItem(
                             newText,
                             Math.max(8f, newSize),
                             item.x, item.y,
                             item.typefaceStyle,
-                            item.color
+                            item.color,
+                            selectedAlign[0]
                     );
                     viewModel.updateItem(index, updated);
                 })
-                .setNegativeButton("Отмена", null)
-                .show();
+                .setNeutralButton("Удалить", (d, w) -> viewModel.removeItem(index))
+                .setNegativeButton("Отмена", null);
+
+        editDialog = b.create();
+        editDialog.setOnDismissListener(d -> editDialog = null);
+        editDialog.show();
     }
+
+
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
                 boolean granted = false;
