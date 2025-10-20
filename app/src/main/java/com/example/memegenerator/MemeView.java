@@ -32,6 +32,11 @@ public class MemeView extends View {
     private final float HANDLE_SIZE_DP = 16f;
     private final float BOX_STROKE_DP = 1.5f;
 
+    @Nullable private Bitmap baseOriginal = null;
+    private float baseScale = 1f;
+    private float baseOffsetY = 0f;
+
+
     @Nullable private Bitmap bg;
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private List<TextItem> items = Collections.emptyList();
@@ -69,15 +74,13 @@ public class MemeView extends View {
                         .setLineSpacing(0, 1f)
                         .build();
             } else {
-                // Deprecated, но рабочий на старых API
                 return new StaticLayout(cs, tp, w, mapAlign(item.align), 1f, 0f, false);
             }
         } else {
-            // Ширина не задана → рисуем одной строкой: сделаем расчёт на ширину текста
             int singleWidth = (int) Math.ceil(tp.measureText(cs, 0, cs.length()));
             if (Build.VERSION.SDK_INT >= 23) {
                 return StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, Math.max(1, singleWidth))
-                        .setAlignment(Layout.Alignment.ALIGN_NORMAL) // управим руками по X
+                        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
                         .setIncludePad(false)
                         .build();
             } else {
@@ -129,7 +132,6 @@ public class MemeView extends View {
     public void addImageBitmap(@Nullable Bitmap bmp) {
         if (bmp == null) return;
 
-        // Если View ещё не измерен — откладываем добавление до следующего кадра
         if (getWidth() <= 0) {
             post(() -> addImageBitmap(bmp));
             return;
@@ -138,27 +140,21 @@ public class MemeView extends View {
         int vw = getWidth();
         int bw = bmp.getWidth();
         int bh = bmp.getHeight();
-
         if (bw <= 0 || bh <= 0) return;
 
-        // Масштабируем по ширине View, сохраняем пропорции
-        float scale = vw / (float) bw;
-        int sw = vw;
-        int sh = Math.max(1, Math.round(bh * scale));
+        baseOriginal = bmp;
+        baseScale = vw / (float) bw;
+        int sh = Math.max(1, Math.round(bh * baseScale));
+        baseOffsetY = (getHeight() > 0) ? Math.max(0f, (getHeight() - sh) * 0.5f) : 0f;
 
-        Bitmap scaled = Bitmap.createScaledBitmap(bmp, sw, sh, true);
-
-        // Ставим по центру вертикали, по X от левого края
-        float x = 0f;
-        float y = (getHeight() > 0) ? Math.max(0f, (getHeight() - sh) * 0.5f) : 0f;
-
-        images.add(new ImageItem(scaled, x, y));
+        Bitmap scaled = Bitmap.createScaledBitmap(bmp, vw, sh, true);
+        images.add(new ImageItem(scaled, 0f, baseOffsetY));
         invalidate();
     }
 
 
+
     public void setBackgroundBitmap(@Nullable Bitmap newBg) {
-        // рециклим только если это не HARDWARE
         if (bg != null && !bg.isRecycled() && !(Build.VERSION.SDK_INT >= 26 && bg.getConfig() == Bitmap.Config.HARDWARE)) {
             bg.recycle();
         }
@@ -205,30 +201,25 @@ public class MemeView extends View {
         if (draggingIndex >= items.size()) draggingIndex = -1;
 
 
-        // 1) Фон (если был)
         if (bg != null) {
             if (bgDst.width() == 0 || bgDst.height() == 0) computeBgRects(getWidth(), getHeight());
             canvas.drawBitmap(bg, bgSrc, bgDst, null);
         }
 
-        // 2) Фото-слои (добавленные изображения)
         for (ImageItem ii : images) {
             if (ii.bmp != null && !ii.bmp.isRecycled()) {
                 canvas.drawBitmap(ii.bmp, ii.x, ii.y, null);
             }
         }
 
-        // 3) Тексты (StaticLayout, с учётом выравнивания и базовой линии!)
         for (int i = 0; i < items.size(); i++) {
             TextItem item = items.get(i);
 
             float widthPx = item.boxWidth > 0 ? item.boxWidth : 0f;
             StaticLayout layout = buildLayout(item, widthPx);
 
-            // Вычисляем X
             float drawX;
             if (widthPx <= 0f) {
-                // Однострочный: смещаем по align вручную
                 TextPaint tp = new TextPaint(textPaint);
                 tp.setTextSize(sp(item.textSizeSp));
                 tp.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
@@ -237,24 +228,20 @@ public class MemeView extends View {
                 else if (item.align == TextItem.ALIGN_RIGHT)  drawX = item.x - tw;
                 else                                          drawX = item.x;
             } else {
-                // Многострочный: левый край — это item.x, выравнивание внутри layout
                 drawX = item.x;
             }
 
-            // Корректно ставим по вертикали: item.y — это БАЗОВАЯ ЛИНИЯ первой строки
             TextPaint tpForBaseline = new TextPaint(textPaint);
             tpForBaseline.setTextSize(sp(item.textSizeSp));
             tpForBaseline.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
             Paint.FontMetrics fm = tpForBaseline.getFontMetrics();
             float topY = item.y + fm.ascent; // ascent < 0, так что сдвигаем вверх
 
-            // Рисуем текст
             canvas.save();
             canvas.translate(drawX, topY);
             layout.draw(canvas);
             canvas.restore();
 
-            // Хитбокс и ручка — только для выбранного
             if (i == selectedTextIndex) {
                 Paint boxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 boxPaint.setStyle(Paint.Style.STROKE);
@@ -264,10 +251,8 @@ public class MemeView extends View {
                 float boxW = (widthPx > 0f) ? widthPx : layout.getWidth();
                 float boxH = layout.getHeight();
 
-                // рамка
                 canvas.drawRect(drawX, topY, drawX + boxW, topY + boxH, boxPaint);
 
-                // ручка в правом нижнем углу
                 float hs = dp(HANDLE_SIZE_DP);
                 float hx = drawX + boxW - hs;
                 float hy = topY + boxH - hs;
@@ -308,6 +293,83 @@ public class MemeView extends View {
         draw(c);
         return out;
     }
+    /** Экспорт в РАЗМЕРЕ ОРИГИНАЛЬНОЙ ФОТОГРАФИИ (без хитбоксов) */
+    public Bitmap exportToBitmapAtOriginal() {
+        if (baseOriginal == null || baseOriginal.isRecycled()) {
+            // Фолбэк: если фото не загружено, отдаём то, что на экране (скриншот)
+            return exportToBitmap();
+        }
+
+        int outW = baseOriginal.getWidth();
+        int outH = baseOriginal.getHeight();
+
+        Bitmap out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+
+        c.drawBitmap(baseOriginal, 0f, 0f, null);
+
+        for (int i = 0; i < items.size(); i++) {
+            TextItem item = items.get(i);
+
+            float s = baseScale;
+            float inv = (s == 0f) ? 1f : (1f / s);
+
+            TextPaint tp = new TextPaint(textPaint);
+            tp.setTextSize(sp(item.textSizeSp) * inv);
+            tp.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
+            tp.setColor(item.color);
+
+            float baseLineY_export = (item.y - baseOffsetY) * inv;
+
+            float widthPxExport = item.boxWidth > 0 ? item.boxWidth * inv : 0f;
+            int lw = (int) Math.max(1, widthPxExport);
+            CharSequence cs = item.text == null ? "" : item.text;
+
+            StaticLayout layout;
+            if (widthPxExport > 0f) {
+                if (Build.VERSION.SDK_INT >= 23) {
+                    layout = StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, lw)
+                            .setAlignment(mapAlign(item.align))
+                            .setIncludePad(false)
+                            .setLineSpacing(0, 1f)
+                            .build();
+                } else {
+                    layout = new StaticLayout(cs, tp, lw, mapAlign(item.align), 1f, 0f, false);
+                }
+            } else {
+                int singleW = (int) Math.ceil(tp.measureText(cs, 0, cs.length()));
+                if (Build.VERSION.SDK_INT >= 23) {
+                    layout = StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, Math.max(1, singleW))
+                            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                            .setIncludePad(false)
+                            .build();
+                } else {
+                    layout = new StaticLayout(cs, tp, Math.max(1, singleW), Layout.Alignment.ALIGN_NORMAL, 1f, 0f, false);
+                }
+            }
+
+            float drawX_export;
+            if (widthPxExport <= 0f) {
+                float tw = tp.measureText(cs, 0, cs.length());
+                if (item.align == TextItem.ALIGN_CENTER)      drawX_export = (item.x * inv) - tw / 2f;
+                else if (item.align == TextItem.ALIGN_RIGHT)  drawX_export = (item.x * inv) - tw;
+                else                                          drawX_export = (item.x * inv);
+            } else {
+                drawX_export = item.x * inv;
+            }
+
+            Paint.FontMetrics fm = tp.getFontMetrics();
+            float topY_export = baseLineY_export + fm.ascent; // ascent < 0
+
+            c.save();
+            c.translate(drawX_export, topY_export);
+            layout.draw(c);
+            c.restore();
+        }
+
+        return out;
+    }
+
 
     @Override public boolean onTouchEvent(MotionEvent e) {
         gestureDetector.onTouchEvent(e);
@@ -317,12 +379,10 @@ public class MemeView extends View {
 
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: {
-                // Выбор текста
                 int idx = hitTestTextIndex(x, y);
                 if (idx >= 0) {
                     selectedTextIndex = idx;
 
-                    // Проверим попадание в ручку ресайза
                     if (isInResizeHandle(idx, x, y)) {
                         resizingText = true;
                         draggingIndex = idx;
@@ -331,12 +391,10 @@ public class MemeView extends View {
                         return true;
                     }
 
-                    // Иначе — обычное перетаскивание текста
                     draggingIndex = idx;
-                    draggingImage = false; // на всякий, мы картинки не двигаем
+                    draggingImage = false;
                     moved = false;
 
-                    // Для dragDx/Dy нужно реальное смещение от текущей опорной точки (item.x, item.y)
                     TextItem it = items.get(draggingIndex);
                     dragDx = x - it.x;
                     dragDy = y - it.y;
@@ -352,7 +410,6 @@ public class MemeView extends View {
                 if (draggingIndex >= 0) {
                     TextItem it = items.get(draggingIndex);
                     if (resizingText) {
-                        // изменяем ширину блока
                         float width = it.boxWidth > 0 ? it.boxWidth : measureSingleLineWidth(it);
                         float delta = x - resizeStartX;
                         float newWidth = Math.max(dp(60), width + delta); // минимальная ширина ~60dp
@@ -361,7 +418,6 @@ public class MemeView extends View {
                         invalidate();
                         return true;
                     } else {
-                        // перетаскиваем как раньше
                         float nx = x - dragDx, ny = y - dragDy;
                         items.set(draggingIndex, it.withPosition(nx, ny));
                         moved = true;
@@ -378,7 +434,6 @@ public class MemeView extends View {
                     if (!resizingText && moved && movedListener != null) {
                         movedListener.onTextMoved(draggingIndex, items.get(draggingIndex));
                     } else if (resizingText && movedListener != null) {
-                        // можно уведомить VM, что размер блока изменился
                         movedListener.onTextMoved(draggingIndex, items.get(draggingIndex));
                     }
                 }
@@ -396,7 +451,6 @@ public class MemeView extends View {
         float widthPx = item.boxWidth > 0 ? item.boxWidth : measureSingleLineWidth(item);
         StaticLayout layout = buildLayout(item, widthPx);
 
-        // X как в onDraw
         float drawX;
         if (item.boxWidth > 0) {
             drawX = item.x;
@@ -410,7 +464,6 @@ public class MemeView extends View {
             else                                          drawX = item.x;
         }
 
-        // Y как в onDraw (по базовой линии)
         TextPaint tpForBaseline = new TextPaint(textPaint);
         tpForBaseline.setTextSize(sp(item.textSizeSp));
         tpForBaseline.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
@@ -447,14 +500,12 @@ public class MemeView extends View {
         return idx;
     }
     private int hitTestTextIndex(float touchX, float touchY) {
-        // Идём с конца — последний (верхний) нарисованный ловит тап первым
         for (int i = items.size() - 1; i >= 0; i--) {
             TextItem item = items.get(i);
 
             float widthPx = item.boxWidth > 0 ? item.boxWidth : measureSingleLineWidth(item);
             StaticLayout layout = buildLayout(item, widthPx);
 
-            // X как в onDraw
             float drawX;
             if (item.boxWidth > 0) {
                 drawX = item.x;
@@ -468,7 +519,6 @@ public class MemeView extends View {
                 else                                          drawX = item.x;
             }
 
-            // Y как в onDraw (item.y — базовая линия первой строки)
             TextPaint tpForBaseline = new TextPaint(textPaint);
             tpForBaseline.setTextSize(sp(item.textSizeSp));
             tpForBaseline.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));

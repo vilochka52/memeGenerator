@@ -90,7 +90,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void saveCurrentMeme() {
-        Bitmap out = binding.memeView.exportToBitmap();
+        Bitmap out = binding.memeView.exportToBitmapAtOriginal();
         new Thread(() -> {
             Uri saved = MemeRepository.saveBitmapToGallery(
                     this, out, "meme_" + System.currentTimeMillis() + ".png");
