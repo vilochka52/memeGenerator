@@ -1,6 +1,10 @@
 package com.example.memegenerator;
 import android.view.View;
 import android.widget.Button;
+import android.content.Intent;
+import com.google.android.material.appbar.MaterialToolbar;
+import android.view.MenuItem;
+
 
 import android.graphics.Bitmap;
 import android.net.Uri;
@@ -35,10 +39,21 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
+
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        MaterialToolbar tb = findViewById(R.id.topBar);
+        setSupportActionBar(tb);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setTitle("Редактор");
+        }
+
+
 
         viewModel = new ViewModelProvider(this).get(MemeViewModel.class);
         viewModel.getTextItems().observe(this, items -> binding.memeView.setTextItems(items));
@@ -62,7 +77,6 @@ public class MainActivity extends AppCompatActivity {
             viewModel.addTextCentered("Ваш текст", 32f, x, y);
             Toast.makeText(this, "Двойной тап по тексту — редактировать", Toast.LENGTH_SHORT).show();
         });
-
         binding.btnSave.setOnClickListener(v -> saveCurrentMeme());
     }
 
@@ -95,11 +109,35 @@ public class MainActivity extends AppCompatActivity {
             Uri saved = MemeRepository.saveBitmapToGallery(
                     this, out, "meme_" + System.currentTimeMillis() + ".png");
             runOnUiThread(() -> {
-                if (saved != null) Toast.makeText(this, "Сохранено в Галерею", Toast.LENGTH_SHORT).show();
-                else Toast.makeText(this, "Не удалось сохранить", Toast.LENGTH_SHORT).show();
+                if (saved != null) {
+                    Toast.makeText(this, "Сохранено в Галерею", Toast.LENGTH_SHORT).show();
+
+                    // >>> ДОБАВЛЕНО: пишем в историю
+                    String[] tb = pickTopBottomTexts();
+                    saveMemeToHistory(saved, tb[0], tb[1]);
+                    // <<<
+
+                } else {
+                    Toast.makeText(this, "Не удалось сохранить", Toast.LENGTH_SHORT).show();
+                }
             });
         }).start();
     }
+
+    @NonNull
+    private String[] pickTopBottomTexts() {
+        var live = viewModel.getTextItems().getValue();
+        String top = "";
+        String bottom = "";
+        if (live != null && !live.isEmpty()) {
+            top = live.get(0).text != null ? live.get(0).text : "";
+            if (live.size() > 1) {
+                bottom = live.get(1).text != null ? live.get(1).text : "";
+            }
+        }
+        return new String[]{ top, bottom };
+    }
+
 
     private void showEditDialog(int index, @NonNull TextItem item) {
         // Если уже открыт диалог редактирования – просто игнорируем повторный дабл-тап,
@@ -239,4 +277,31 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
+    private void saveMemeToHistory(@NonNull Uri savedUri, @NonNull String topText, @NonNull String bottomText) {
+        new Thread(() -> {
+            com.example.memegenerator.data.Meme meme =
+                    new com.example.memegenerator.data.Meme(
+                            savedUri.toString(), // content:// … сохраняем строкой
+                            topText,
+                            bottomText,
+                            System.currentTimeMillis()
+                    );
+            com.example.memegenerator.data.MemeDatabase
+                    .getInstance(getApplicationContext())
+                    .memeDao()
+                    .insert(meme);
+        }).start();
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            finish();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+
+
 }
