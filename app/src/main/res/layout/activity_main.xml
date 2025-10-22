@@ -1,19 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg"
-    android:fitsSystemWindows="true">
+    android:background="@color/bg">
 
-    <!-- Верхний AppBar -->
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/bg"
-        android:fitsSystemWindows="true"
         app:elevation="0dp">
 
         <com.google.android.material.appbar.MaterialToolbar
@@ -22,26 +19,41 @@
             android:layout_height="?attr/actionBarSize"
             app:title="@string/editor_title"
             app:titleTextColor="@color/on_surface"
-            app:navigationIconTint="@color/on_surface"
-            app:navigationIcon="?attr/homeAsUpIndicator"/>
+            app:navigationIcon="?attr/homeAsUpIndicator"
+            app:navigationIconTint="@color/on_surface">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSave"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="right"
+                android:paddingStart="15dp"
+                android:paddingEnd="15dp"
+                android:text="@string/save"
+                android:textAllCaps="false"
+                android:textSize="18dp"
+                android:textStyle="bold"
+                android:textColor="@color/on_surface"
+                app:cornerRadius="100dp"
+                app:iconPadding="0dp"
+                app:backgroundTint="@android:color/transparent" />
+        </com.google.android.material.appbar.MaterialToolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Контент без жёстких отступов: поведение скролла под AppBar -->
     <com.example.memegenerator.MemeView
         android:id="@+id/memeView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@color/bg"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        android:layout_marginBottom="80dp" />
 
-    <!-- Нижняя панель + кнопки -->
     <com.google.android.material.bottomappbar.BottomAppBar
         android:id="@+id/bottomAppBar"
         android:layout_width="match_parent"
         android:layout_height="80dp"
         android:layout_gravity="bottom"
         android:backgroundTint="@color/surface"
-        android:fitsSystemWindows="true"
         app:fabAlignmentMode="center">
 
         <LinearLayout
@@ -57,11 +69,12 @@
                 android:layout_width="0dp"
                 android:layout_height="52dp"
                 android:layout_weight="1"
-                android:text="@string/pick" />
+                android:text="@string/pick"
+                />
 
             <Space
-                android:layout_width="8dp"
-                android:layout_height="0dp" />
+                android:layout_width="20dp"
+                android:layout_height="20dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnAddText"
@@ -71,14 +84,5 @@
                 android:text="@string/add_text" />
         </LinearLayout>
     </com.google.android.material.bottomappbar.BottomAppBar>
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabSave"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:srcCompat="@android:drawable/ic_menu_save"
-        app:tint="@android:color/white"
-        app:layout_anchor="@id/bottomAppBar"
-        app:layout_anchorGravity="center" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

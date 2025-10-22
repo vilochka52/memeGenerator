@@ -1,117 +1,99 @@
 package com.example.memegenerator;
-import android.graphics.Color;
-import android.text.Layout;
-import android.text.StaticLayout;
-import android.text.TextPaint;
-
 
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.os.Build;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextPaint;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-
 public class MemeView extends View {
-    private int selectedTextIndex = -1;
-    private boolean resizingText = false;
-    private float resizeStartX;
-    private final float HANDLE_SIZE_DP = 16f;
-    private final float BOX_STROKE_DP = 1.5f;
-
     @Nullable private Bitmap baseOriginal = null;
+    private final Matrix imageMatrix = new Matrix();
+    private final RectF srcRect = new RectF();
+    private final RectF dstRect = new RectF();
+    private final Paint imgPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+
     private float baseScale = 1f;
+    private float baseOffsetX = 0f;
     private float baseOffsetY = 0f;
 
+    private int contentBottomInsetPx = 0;
 
     @Nullable private Bitmap bg;
-    private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private List<TextItem> items = Collections.emptyList();
-
     private final Rect bgSrc = new Rect();
     private final Rect bgDst = new Rect();
 
+    private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private List<TextItem> items = Collections.emptyList();
+
+    private int selectedTextIndex = -1;
+    private boolean resizingText = false;
+    private float resizeStartX;
     private int draggingIndex = -1;
     private float dragDx = 0f, dragDy = 0f;
     private boolean moved = false;
-    private float dp(float v) {
-        return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
-    }
 
-    private Layout.Alignment mapAlign(int a) {
-        if (a == TextItem.ALIGN_CENTER) return Layout.Alignment.ALIGN_CENTER;
-        if (a == TextItem.ALIGN_RIGHT)  return Layout.Alignment.ALIGN_OPPOSITE;
-        return Layout.Alignment.ALIGN_NORMAL;
-    }
-
-    private StaticLayout buildLayout(TextItem item, float widthPx) {
-        TextPaint tp = new TextPaint(textPaint);
-        tp.setTextSize(sp(item.textSizeSp));
-        tp.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
-        tp.setColor(item.color);
-
-        CharSequence cs = item.text == null ? "" : item.text;
-        int w = (int) Math.max(1, widthPx);
-
-        if (widthPx > 0f) {
-            if (Build.VERSION.SDK_INT >= 23) {
-                return StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, w)
-                        .setAlignment(mapAlign(item.align))
-                        .setIncludePad(false)
-                        .setLineSpacing(0, 1f)
-                        .build();
-            } else {
-                return new StaticLayout(cs, tp, w, mapAlign(item.align), 1f, 0f, false);
-            }
-        } else {
-            int singleWidth = (int) Math.ceil(tp.measureText(cs, 0, cs.length()));
-            if (Build.VERSION.SDK_INT >= 23) {
-                return StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, Math.max(1, singleWidth))
-                        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                        .setIncludePad(false)
-                        .build();
-            } else {
-                return new StaticLayout(cs, tp, Math.max(1, singleWidth), Layout.Alignment.ALIGN_NORMAL, 1f, 0f, false);
-            }
-        }
-    }
+    private static final float HANDLE_SIZE_DP = 16f;
+    private static final float BOX_STROKE_DP  = 1.5f;
 
     private final GestureDetector gestureDetector;
 
     public interface OnTextEditRequestListener { void onRequestEdit(int index, TextItem item); }
-    public interface OnTextMovedListener { void onTextMoved(int index, TextItem itemWithNewPos); }
-
+    public interface OnTextMovedListener       { void onTextMoved(int index, TextItem itemWithNewPos); }
     private OnTextEditRequestListener editListener;
     private OnTextMovedListener movedListener;
 
-    public MemeView(Context c) { super(c); gestureDetector = gd(c); init(); }
-    public MemeView(Context c, AttributeSet a) { super(c, a); gestureDetector = gd(c); init(); }
-    public MemeView(Context c, AttributeSet a, int s) { super(c, a, s); gestureDetector = gd(c); init(); }
+    public MemeView(Context c) {
+        super(c);
+        gestureDetector = createGestureDetector(c);
+        init();
+    }
+    public MemeView(Context c, AttributeSet a) {
+        super(c, a);
+        gestureDetector = createGestureDetector(c);
+        init();
+    }
+    public MemeView(Context c, AttributeSet a, int s) {
+        super(c, a, s);
+        gestureDetector = createGestureDetector(c);
+        init();
+    }
 
     private void init() {
         textPaint.setTextAlign(Paint.Align.LEFT);
         textPaint.setSubpixelText(true);
+        setWillNotDraw(false);
     }
 
-    private GestureDetector gd(Context ctx) {
+    private GestureDetector createGestureDetector(Context ctx) {
         return new GestureDetector(ctx, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDoubleTap(MotionEvent e) {
                 if (items.isEmpty()) return false;
                 int idx = hitTestTextIndex(e.getX(), e.getY());
-                if (idx >= 0 && editListener != null) { editListener.onRequestEdit(idx, items.get(idx)); return true; }
+                if (idx >= 0 && editListener != null) {
+                    editListener.onRequestEdit(idx, items.get(idx));
+                    return true;
+                }
                 return false;
             }
             @Override public boolean onDown(MotionEvent e) { return true; }
@@ -121,41 +103,9 @@ public class MemeView extends View {
     public void setOnTextEditRequestListener(OnTextEditRequestListener l) { this.editListener = l; }
     public void setOnTextMovedListener(OnTextMovedListener l) { this.movedListener = l; }
 
-    private static class ImageItem {
-        Bitmap bmp;
-        float x, y;
-        ImageItem(Bitmap b, float x, float y) { this.bmp = b; this.x = x; this.y = y; }
-    }
-    private final List<ImageItem> images = new ArrayList<>();
-    private boolean draggingImage = false;
-
-    public void addImageBitmap(@Nullable Bitmap bmp) {
-        if (bmp == null) return;
-
-        if (getWidth() <= 0) {
-            post(() -> addImageBitmap(bmp));
-            return;
-        }
-
-        int vw = getWidth();
-        int bw = bmp.getWidth();
-        int bh = bmp.getHeight();
-        if (bw <= 0 || bh <= 0) return;
-
-        baseOriginal = bmp;
-        baseScale = vw / (float) bw;
-        int sh = Math.max(1, Math.round(bh * baseScale));
-        baseOffsetY = (getHeight() > 0) ? Math.max(0f, (getHeight() - sh) * 0.5f) : 0f;
-
-        Bitmap scaled = Bitmap.createScaledBitmap(bmp, vw, sh, true);
-        images.add(new ImageItem(scaled, 0f, baseOffsetY));
-        invalidate();
-    }
-
-
-
     public void setBackgroundBitmap(@Nullable Bitmap newBg) {
-        if (bg != null && !bg.isRecycled() && !(Build.VERSION.SDK_INT >= 26 && bg.getConfig() == Bitmap.Config.HARDWARE)) {
+        if (bg != null && !bg.isRecycled()
+                && !(Build.VERSION.SDK_INT >= 26 && bg.getConfig() == Bitmap.Config.HARDWARE)) {
             bg.recycle();
         }
         bg = newBg;
@@ -163,53 +113,131 @@ public class MemeView extends View {
         invalidate();
     }
 
-    public void setTextItems(List<TextItem> list) {
+    public void setTextItems(@Nullable List<TextItem> list) {
         items = (list == null) ? Collections.emptyList() : new ArrayList<>(list);
         invalidate();
+    }
+
+    public void addImageBitmap(@Nullable Bitmap bmp) {
+        if (bmp == null) return;
+        baseOriginal = bmp;
+        recomputeImageMatrix();
+        invalidate();
+    }
+
+    public boolean hasImage() {
+        return baseOriginal != null && !baseOriginal.isRecycled();
+    }
+
+    public void setContentBottomInsetPx(int px) {
+        if (px < 0) px = 0;
+        if (contentBottomInsetPx != px) {
+            contentBottomInsetPx = px;
+            recomputeImageMatrix();
+            invalidate();
+        }
+    }
+
+    public Bitmap exportToBitmap() {
+        Bitmap out = Bitmap.createBitmap(getWidth(), getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+        draw(c);
+        return out;
+    }
+
+    public Bitmap exportToBitmapAtOriginal() {
+        if (!hasImage()) {
+            return exportToBitmap();
+        }
+
+        int outW = baseOriginal.getWidth();
+        int outH = baseOriginal.getHeight();
+        Bitmap out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+
+        c.drawBitmap(baseOriginal, 0f, 0f, null);
+
+        float inv = (baseScale == 0f) ? 1f : (1f / baseScale);
+
+        for (int i = 0; i < items.size(); i++) {
+            TextItem item = items.get(i);
+
+            TextPaint tp = new TextPaint(textPaint);
+            tp.setTextSize(sp(item.textSizeSp) * inv);
+            tp.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
+            tp.setColor(item.color);
+
+            CharSequence cs = item.text == null ? "" : item.text;
+
+            float widthPxExport = item.boxWidth > 0 ? item.boxWidth * inv : 0f;
+            int lw = (int) Math.max(1, widthPxExport);
+
+            StaticLayout layout;
+            if (widthPxExport > 0f) {
+                if (Build.VERSION.SDK_INT >= 23) {
+                    layout = StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, lw)
+                            .setAlignment(mapAlign(item.align))
+                            .setIncludePad(false)
+                            .setLineSpacing(0, 1f)
+                            .build();
+                } else {
+                    layout = new StaticLayout(cs, tp, lw, mapAlign(item.align), 1f, 0f, false);
+                }
+            } else {
+                int singleW = (int) Math.ceil(tp.measureText(cs, 0, cs.length()));
+                if (Build.VERSION.SDK_INT >= 23) {
+                    layout = StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, Math.max(1, singleW))
+                            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                            .setIncludePad(false)
+                            .build();
+                } else {
+                    layout = new StaticLayout(cs, tp, Math.max(1, singleW),
+                            Layout.Alignment.ALIGN_NORMAL, 1f, 0f, false);
+                }
+            }
+
+            float xOnOriginal;
+            if (widthPxExport <= 0f) {
+                float tw = tp.measureText(cs, 0, cs.length());
+                if (item.align == TextItem.ALIGN_CENTER)      xOnOriginal = ((item.x - baseOffsetX) * inv) - tw / 2f;
+                else if (item.align == TextItem.ALIGN_RIGHT)  xOnOriginal = ((item.x - baseOffsetX) * inv) - tw;
+                else                                          xOnOriginal =  (item.x - baseOffsetX) * inv;
+            } else {
+                xOnOriginal = (item.x - baseOffsetX) * inv;
+            }
+
+            Paint.FontMetrics fm = tp.getFontMetrics();
+            float baselineY = ((item.y - baseOffsetY) * inv);
+            float topY = baselineY + fm.ascent;
+
+            c.save();
+            c.translate(xOnOriginal, topY);
+            layout.draw(c);
+            c.restore();
+        }
+
+        return out;
     }
 
     @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         computeBgRects(w, h);
-    }
-
-    private void computeBgRects(int vw, int vh) {
-        bgDst.set(0, 0, vw, vh);
-        if (bg == null) return;
-        int bw = bg.getWidth(), bh = bg.getHeight();
-        bgSrc.set(0, 0, bw, bh);
-
-        float viewRatio = vw / (float) vh;
-        float bmpRatio  = bw / (float) bh;
-
-        if (bmpRatio > viewRatio) {
-            int dstW = vw;
-            int dstH = Math.round(vw / bmpRatio);
-            int top  = (vh - dstH) / 2;
-            bgDst.set(0, top, dstW, top + dstH);
-        } else {
-            int dstH = vh;
-            int dstW = Math.round(vh * bmpRatio);
-            int left = (vw - dstW) / 2;
-            bgDst.set(left, 0, left + dstW, dstH);
-        }
+        recomputeImageMatrix();
     }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+
         if (selectedTextIndex >= items.size()) selectedTextIndex = -1;
         if (draggingIndex >= items.size()) draggingIndex = -1;
-
 
         if (bg != null) {
             if (bgDst.width() == 0 || bgDst.height() == 0) computeBgRects(getWidth(), getHeight());
             canvas.drawBitmap(bg, bgSrc, bgDst, null);
         }
 
-        for (ImageItem ii : images) {
-            if (ii.bmp != null && !ii.bmp.isRecycled()) {
-                canvas.drawBitmap(ii.bmp, ii.x, ii.y, null);
-            }
+        if (hasImage()) {
+            canvas.drawBitmap(baseOriginal, imageMatrix, imgPaint);
         }
 
         for (int i = 0; i < items.size(); i++) {
@@ -235,7 +263,7 @@ public class MemeView extends View {
             tpForBaseline.setTextSize(sp(item.textSizeSp));
             tpForBaseline.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
             Paint.FontMetrics fm = tpForBaseline.getFontMetrics();
-            float topY = item.y + fm.ascent; // ascent < 0, так что сдвигаем вверх
+            float topY = item.y + fm.ascent;
 
             canvas.save();
             canvas.translate(drawX, topY);
@@ -270,107 +298,6 @@ public class MemeView extends View {
         }
     }
 
-
-    private int findClosestImageIndex(float touchX, float touchY) {
-        int idx = -1; float best = Float.MAX_VALUE;
-        for (int i = 0; i < images.size(); i++) {
-            ImageItem it = images.get(i);
-            float cx = it.x + (it.bmp != null ? it.bmp.getWidth()/2f : 0f);
-            float cy = it.y + (it.bmp != null ? it.bmp.getHeight()/2f : 0f);
-            float dx = cx - touchX, dy = cy - touchY, d = dx*dx + dy*dy;
-            if (d < best) { best = d; idx = i; }
-        }
-        return idx;
-    }
-
-    private float sp(float sp) {
-        return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, getResources().getDisplayMetrics());
-    }
-
-    public Bitmap exportToBitmap() {
-        Bitmap out = Bitmap.createBitmap(getWidth(), getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(out);
-        draw(c);
-        return out;
-    }
-    /** Экспорт в РАЗМЕРЕ ОРИГИНАЛЬНОЙ ФОТОГРАФИИ (без хитбоксов) */
-    public Bitmap exportToBitmapAtOriginal() {
-        if (baseOriginal == null || baseOriginal.isRecycled()) {
-            // Фолбэк: если фото не загружено, отдаём то, что на экране (скриншот)
-            return exportToBitmap();
-        }
-
-        int outW = baseOriginal.getWidth();
-        int outH = baseOriginal.getHeight();
-
-        Bitmap out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(out);
-
-        c.drawBitmap(baseOriginal, 0f, 0f, null);
-
-        for (int i = 0; i < items.size(); i++) {
-            TextItem item = items.get(i);
-
-            float s = baseScale;
-            float inv = (s == 0f) ? 1f : (1f / s);
-
-            TextPaint tp = new TextPaint(textPaint);
-            tp.setTextSize(sp(item.textSizeSp) * inv);
-            tp.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
-            tp.setColor(item.color);
-
-            float baseLineY_export = (item.y - baseOffsetY) * inv;
-
-            float widthPxExport = item.boxWidth > 0 ? item.boxWidth * inv : 0f;
-            int lw = (int) Math.max(1, widthPxExport);
-            CharSequence cs = item.text == null ? "" : item.text;
-
-            StaticLayout layout;
-            if (widthPxExport > 0f) {
-                if (Build.VERSION.SDK_INT >= 23) {
-                    layout = StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, lw)
-                            .setAlignment(mapAlign(item.align))
-                            .setIncludePad(false)
-                            .setLineSpacing(0, 1f)
-                            .build();
-                } else {
-                    layout = new StaticLayout(cs, tp, lw, mapAlign(item.align), 1f, 0f, false);
-                }
-            } else {
-                int singleW = (int) Math.ceil(tp.measureText(cs, 0, cs.length()));
-                if (Build.VERSION.SDK_INT >= 23) {
-                    layout = StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, Math.max(1, singleW))
-                            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                            .setIncludePad(false)
-                            .build();
-                } else {
-                    layout = new StaticLayout(cs, tp, Math.max(1, singleW), Layout.Alignment.ALIGN_NORMAL, 1f, 0f, false);
-                }
-            }
-
-            float drawX_export;
-            if (widthPxExport <= 0f) {
-                float tw = tp.measureText(cs, 0, cs.length());
-                if (item.align == TextItem.ALIGN_CENTER)      drawX_export = (item.x * inv) - tw / 2f;
-                else if (item.align == TextItem.ALIGN_RIGHT)  drawX_export = (item.x * inv) - tw;
-                else                                          drawX_export = (item.x * inv);
-            } else {
-                drawX_export = item.x * inv;
-            }
-
-            Paint.FontMetrics fm = tp.getFontMetrics();
-            float topY_export = baseLineY_export + fm.ascent; // ascent < 0
-
-            c.save();
-            c.translate(drawX_export, topY_export);
-            layout.draw(c);
-            c.restore();
-        }
-
-        return out;
-    }
-
-
     @Override public boolean onTouchEvent(MotionEvent e) {
         gestureDetector.onTouchEvent(e);
         if (items.isEmpty()) return super.onTouchEvent(e);
@@ -392,7 +319,6 @@ public class MemeView extends View {
                     }
 
                     draggingIndex = idx;
-                    draggingImage = false;
                     moved = false;
 
                     TextItem it = items.get(draggingIndex);
@@ -412,7 +338,7 @@ public class MemeView extends View {
                     if (resizingText) {
                         float width = it.boxWidth > 0 ? it.boxWidth : measureSingleLineWidth(it);
                         float delta = x - resizeStartX;
-                        float newWidth = Math.max(dp(60), width + delta); // минимальная ширина ~60dp
+                        float newWidth = Math.max(dp(60), width + delta);
                         items.set(draggingIndex, it.withBoxWidth(newWidth));
                         resizeStartX = x;
                         invalidate();
@@ -431,9 +357,7 @@ public class MemeView extends View {
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL: {
                 if (draggingIndex >= 0) {
-                    if (!resizingText && moved && movedListener != null) {
-                        movedListener.onTextMoved(draggingIndex, items.get(draggingIndex));
-                    } else if (resizingText && movedListener != null) {
+                    if (movedListener != null) {
                         movedListener.onTextMoved(draggingIndex, items.get(draggingIndex));
                     }
                 }
@@ -445,43 +369,96 @@ public class MemeView extends View {
         }
         return super.onTouchEvent(e);
     }
-    private boolean isInResizeHandle(int idx, float touchX, float touchY) {
-        TextItem item = items.get(idx);
 
-        float widthPx = item.boxWidth > 0 ? item.boxWidth : measureSingleLineWidth(item);
-        StaticLayout layout = buildLayout(item, widthPx);
+    private void recomputeImageMatrix() {
+        if (baseOriginal == null || getWidth() == 0 || getHeight() == 0) return;
 
-        float drawX;
-        if (item.boxWidth > 0) {
-            drawX = item.x;
-        } else {
-            TextPaint tp = new TextPaint(textPaint);
-            tp.setTextSize(sp(item.textSizeSp));
-            tp.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
-            float tw = tp.measureText(item.text == null ? "" : item.text);
-            if (item.align == TextItem.ALIGN_CENTER)      drawX = item.x - tw / 2f;
-            else if (item.align == TextItem.ALIGN_RIGHT)  drawX = item.x - tw;
-            else                                          drawX = item.x;
-        }
+        srcRect.set(0, 0, baseOriginal.getWidth(), baseOriginal.getHeight());
 
-        TextPaint tpForBaseline = new TextPaint(textPaint);
-        tpForBaseline.setTextSize(sp(item.textSizeSp));
-        tpForBaseline.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
-        Paint.FontMetrics fm = tpForBaseline.getFontMetrics();
-        float topY = item.y + fm.ascent;
+        float l = getPaddingLeft();
+        float t = getPaddingTop();
+        float r = getWidth() - getPaddingRight();
+        float b = getHeight() - getPaddingBottom() - contentBottomInsetPx;
+        if (b < t) b = t;
+        dstRect.set(l, t, r, b);
 
-        float boxW = (item.boxWidth > 0 ? item.boxWidth : layout.getWidth());
-        float boxH = layout.getHeight();
+        imageMatrix.reset();
+        imageMatrix.setRectToRect(srcRect, dstRect, Matrix.ScaleToFit.CENTER);
 
-        float hs = dp(HANDLE_SIZE_DP);
-        float hx = drawX + boxW - hs;
-        float hy = topY + boxH - hs;
+        float sx = dstRect.width()  / srcRect.width();
+        float sy = dstRect.height() / srcRect.height();
+        baseScale = Math.min(sx, sy);
 
-        return (touchX >= hx && touchX <= hx + hs && touchY >= hy && touchY <= hy + hs);
+        float drawW = baseOriginal.getWidth()  * baseScale;
+        float drawH = baseOriginal.getHeight() * baseScale;
+
+        baseOffsetX = l + (dstRect.width()  - drawW) * 0.5f;
+        baseOffsetY = t + (dstRect.height() - drawH) * 0.5f;
     }
 
+    private void computeBgRects(int vw, int vh) {
+        bgDst.set(0, 0, vw, vh);
+        if (bg == null) return;
 
-    private float measureSingleLineWidth(TextItem item) {
+        int bw = bg.getWidth(), bh = bg.getHeight();
+        bgSrc.set(0, 0, bw, bh);
+
+        float viewRatio = vw / (float) vh;
+        float bmpRatio  = bw / (float) bh;
+
+        if (bmpRatio > viewRatio) {
+            int dstW = vw;
+            int dstH = Math.round(vw / bmpRatio);
+            int top  = (vh - dstH) / 2;
+            bgDst.set(0, top, dstW, top + dstH);
+        } else {
+            int dstH = vh;
+            int dstW = Math.round(vh * bmpRatio);
+            int left = (vw - dstW) / 2;
+            bgDst.set(left, 0, left + dstW, dstH);
+        }
+    }
+
+    private Layout.Alignment mapAlign(int a) {
+        if (a == TextItem.ALIGN_CENTER) return Layout.Alignment.ALIGN_CENTER;
+        if (a == TextItem.ALIGN_RIGHT)  return Layout.Alignment.ALIGN_OPPOSITE;
+        return Layout.Alignment.ALIGN_NORMAL;
+    }
+
+    private StaticLayout buildLayout(@NonNull TextItem item, float widthPx) {
+        TextPaint tp = new TextPaint(textPaint);
+        tp.setTextSize(sp(item.textSizeSp));
+        tp.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
+        tp.setColor(item.color);
+
+        CharSequence cs = item.text == null ? "" : item.text;
+        int w = (int) Math.max(1, widthPx);
+
+        if (widthPx > 0f) {
+            if (Build.VERSION.SDK_INT >= 23) {
+                return StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, w)
+                        .setAlignment(mapAlign(item.align))
+                        .setIncludePad(false)
+                        .setLineSpacing(0, 1f)
+                        .build();
+            } else {
+                return new StaticLayout(cs, tp, w, mapAlign(item.align), 1f, 0f, false);
+            }
+        } else {
+            int singleWidth = (int) Math.ceil(tp.measureText(cs, 0, cs.length()));
+            if (Build.VERSION.SDK_INT >= 23) {
+                return StaticLayout.Builder.obtain(cs, 0, cs.length(), tp, Math.max(1, singleWidth))
+                        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                        .setIncludePad(false)
+                        .build();
+            } else {
+                return new StaticLayout(cs, tp, Math.max(1, singleWidth),
+                        Layout.Alignment.ALIGN_NORMAL, 1f, 0f, false);
+            }
+        }
+    }
+
+    private float measureSingleLineWidth(@NonNull TextItem item) {
         TextPaint tp = new TextPaint(textPaint);
         tp.setTextSize(sp(item.textSizeSp));
         tp.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
@@ -489,16 +466,6 @@ public class MemeView extends View {
         return tp.measureText(cs, 0, cs.length());
     }
 
-
-    private int findClosestTextIndex(float touchX, float touchY) {
-        int idx = -1; float best = Float.MAX_VALUE;
-        for (int i = 0; i < items.size(); i++) {
-            TextItem it = items.get(i);
-            float dx = it.x - touchX, dy = it.y - touchY, d = dx*dx + dy*dy;
-            if (d < best) { best = d; idx = i; }
-        }
-        return idx;
-    }
     private int hitTestTextIndex(float touchX, float touchY) {
         for (int i = items.size() - 1; i >= 0; i--) {
             TextItem item = items.get(i);
@@ -536,4 +503,48 @@ public class MemeView extends View {
         return -1;
     }
 
+    private boolean isInResizeHandle(int idx, float touchX, float touchY) {
+        TextItem item = items.get(idx);
+
+        float widthPx = item.boxWidth > 0 ? item.boxWidth : measureSingleLineWidth(item);
+        StaticLayout layout = buildLayout(item, widthPx);
+
+        float drawX;
+        if (item.boxWidth > 0) {
+            drawX = item.x;
+        } else {
+            TextPaint tp = new TextPaint(textPaint);
+            tp.setTextSize(sp(item.textSizeSp));
+            tp.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
+            float tw = tp.measureText(item.text == null ? "" : item.text);
+            if (item.align == TextItem.ALIGN_CENTER)      drawX = item.x - tw / 2f;
+            else if (item.align == TextItem.ALIGN_RIGHT)  drawX = item.x - tw;
+            else                                          drawX = item.x;
+        }
+
+        TextPaint tpForBaseline = new TextPaint(textPaint);
+        tpForBaseline.setTextSize(sp(item.textSizeSp));
+        tpForBaseline.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
+        Paint.FontMetrics fm = tpForBaseline.getFontMetrics();
+        float topY = item.y + fm.ascent;
+
+        float boxW = (item.boxWidth > 0 ? item.boxWidth : layout.getWidth());
+        float boxH = layout.getHeight();
+
+        float hs = dp(HANDLE_SIZE_DP);
+        float hx = drawX + boxW - hs;
+        float hy = topY + boxH - hs;
+
+        return touchX >= hx && touchX <= hx + hs && touchY >= hy && touchY <= hy + hs;
+    }
+
+    private float dp(float v) {
+        return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v,
+                getResources().getDisplayMetrics());
+    }
+
+    private float sp(float v) {
+        return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, v,
+                getResources().getDisplayMetrics());
+    }
 }

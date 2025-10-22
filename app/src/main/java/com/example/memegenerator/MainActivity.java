@@ -15,14 +15,15 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.example.memegenerator.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
-
     @androidx.annotation.Nullable
     private AlertDialog editDialog;
 
@@ -30,21 +31,14 @@ public class MainActivity extends AppCompatActivity {
     private MemeViewModel viewModel;
     private ActivityResultLauncher<String> pickImageLauncher;
 
-    public MainActivity() {
-        super();
-    }
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        // Режим А: система сама вписывает контент под системные бары
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // Toolbar как ActionBar
         setSupportActionBar(binding.topBar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
@@ -54,37 +48,26 @@ public class MainActivity extends AppCompatActivity {
                 getOnBackPressedDispatcher().onBackPressed()
         );
 
-        // Явно задаём цвета (на случай values-night)
         binding.topBar.setBackgroundColor(ContextCompat.getColor(this, R.color.bg));
         binding.topBar.setTitleTextColor(ContextCompat.getColor(this, R.color.on_surface));
         binding.topBar.setNavigationIconTint(ContextCompat.getColor(this, R.color.on_surface));
 
-        // Светлые/тёмные иконки статус-бара при светлом фоне
         new WindowInsetsControllerCompat(getWindow(), binding.getRoot())
                 .setAppearanceLightStatusBars(true);
 
-        // FAB
-        binding.fabSave.setOnClickListener(v -> {
-            v.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
-            saveCurrentMeme();
-        });
-
-        // ViewModel
         viewModel = new ViewModelProvider(this).get(MemeViewModel.class);
         viewModel.getTextItems().observe(this, items -> binding.memeView.setTextItems(items));
 
-        // Коллбеки MemeView
         binding.memeView.setOnTextEditRequestListener(this::showEditDialog);
         binding.memeView.setOnTextMovedListener((index, item) -> viewModel.updateItem(index, item));
 
-        // Выбор изображения
         pickImageLauncher = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
                 this::onImagePicked
         );
+
         binding.btnPick.setOnClickListener(v -> ensurePhotoPermissionThenPick());
 
-        // Добавить текст
         binding.btnAddText.setOnClickListener(v -> {
             float x = Math.max(40f, binding.memeView.getWidth() * 0.5f);
             float y = Math.max(80f, binding.memeView.getHeight() * 0.35f);
@@ -92,8 +75,50 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Двойной тап по тексту — редактировать", Toast.LENGTH_SHORT).show();
         });
 
-        // ВАЖНО: никакой ручной обработки WindowInsets тут не делаем.
-        // (Мы оставили decorFitsSystemWindows(true), всё делает система)
+        binding.btnSave.setEnabled(false);
+        binding.btnSave.setTextColor(ContextCompat.getColor(this, R.color.on_surface));
+        binding.btnSave.setOnClickListener(v -> {
+            if (!binding.memeView.hasImage()) {
+                Toast.makeText(this, "Сначала выберите фото", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            saveCurrentMeme();
+        });
+
+        binding.bottomAppBar.post(() ->
+                binding.memeView.setContentBottomInsetPx(binding.bottomAppBar.getHeight())
+        );
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (view, insets) -> {
+            int status = WindowInsetsCompat.Type.statusBars();
+            int nav = WindowInsetsCompat.Type.navigationBars();
+
+            androidx.core.graphics.Insets sb = insets.getInsets(status);
+            androidx.core.graphics.Insets nb = insets.getInsets(nav);
+
+            binding.appbar.setPadding(
+                    binding.appbar.getPaddingLeft(),
+                    sb.top,
+                    binding.appbar.getPaddingRight(),
+                    binding.appbar.getPaddingBottom()
+            );
+
+            binding.bottomAppBar.setPadding(
+                    binding.bottomAppBar.getPaddingLeft(),
+                    binding.bottomAppBar.getPaddingTop(),
+                    binding.bottomAppBar.getPaddingRight(),
+                    nb.bottom
+            );
+
+            binding.memeView.setPadding(
+                    binding.memeView.getPaddingLeft(),
+                    binding.memeView.getPaddingTop(),
+                    binding.memeView.getPaddingRight(),
+                    nb.bottom + binding.bottomAppBar.getHeight()
+            );
+
+            return insets;
+        });
     }
 
     private void onImagePicked(Uri uri) {
@@ -114,9 +139,15 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         binding.memeView.addImageBitmap(bmp);
+        binding.btnSave.setEnabled(true);
+        binding.btnSave.setTextColor(ContextCompat.getColor(this, R.color.on_surface));
     }
 
     private void saveCurrentMeme() {
+        if (!binding.memeView.hasImage()) {
+            Toast.makeText(this, "Сначала выберите фото", Toast.LENGTH_SHORT).show();
+            return;
+        }
         Bitmap out = binding.memeView.exportToBitmapAtOriginal();
         new Thread(() -> {
             Uri saved = MemeRepository.saveBitmapToGallery(
