@@ -42,7 +42,7 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(binding.topBar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setTitle("Редактор");
+            getSupportActionBar().setDisplayShowTitleEnabled(false);
         }
         binding.topBar.setNavigationOnClickListener(v ->
                 getOnBackPressedDispatcher().onBackPressed()
@@ -119,6 +119,9 @@ public class MainActivity extends AppCompatActivity {
 
             return insets;
         });
+
+        binding.titleText.setText("Редактор");
+        binding.titleText.setTextSize(20f);
     }
 
     private void onImagePicked(Uri uri) {
