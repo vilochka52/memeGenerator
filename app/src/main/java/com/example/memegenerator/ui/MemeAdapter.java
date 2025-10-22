@@ -55,8 +55,10 @@ public class MemeAdapter extends RecyclerView.Adapter<MemeAdapter.VH> {
 
 
         h.itemView.setOnClickListener(v -> {
+            v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
             if (listener != null) listener.onOpenImage(m);
         });
+
     }
 
     @Override

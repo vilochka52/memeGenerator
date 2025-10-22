@@ -1,15 +1,10 @@
 package com.example.memegenerator;
-import android.view.View;
-import android.widget.Button;
-import android.content.Intent;
-import com.google.android.material.appbar.MaterialToolbar;
-import android.view.MenuItem;
-
 
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
@@ -19,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowCompat;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.example.memegenerator.databinding.ActivityMainBinding;
@@ -27,43 +23,81 @@ public class MainActivity extends AppCompatActivity {
     @androidx.annotation.Nullable
     private AlertDialog editDialog;
 
-
     private ActivityMainBinding binding;
     private MemeViewModel viewModel;
     private ActivityResultLauncher<String> pickImageLauncher;
 
-    // ⚠️ НИКАКИХ инициализаций, которые требуют Context, вне onCreate() !
     public MainActivity() {
         super();
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
         super.onCreate(savedInstanceState);
 
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        MaterialToolbar tb = findViewById(R.id.topBar);
-        setSupportActionBar(tb);
+        setSupportActionBar(binding.topBar);
+
+        binding.topBar.setBackgroundColor(
+                androidx.core.content.ContextCompat.getColor(this, R.color.surface)
+        );
+
+
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, insets) -> {
+            androidx.core.graphics.Insets sb = insets.getInsets(
+                    androidx.core.view.WindowInsetsCompat.Type.statusBars());
+            androidx.core.graphics.Insets nb = insets.getInsets(
+                    androidx.core.view.WindowInsetsCompat.Type.navigationBars());
+
+            binding.topBar.setPadding(
+                    binding.topBar.getPaddingLeft(),
+                    sb.top,
+                    binding.topBar.getPaddingRight(),
+                    binding.topBar.getPaddingBottom()
+            );
+
+            binding.bottomAppBar.setPadding(
+                    binding.bottomAppBar.getPaddingLeft(),
+                    binding.bottomAppBar.getPaddingTop(),
+                    binding.bottomAppBar.getPaddingRight(),
+                    nb.bottom
+            );
+
+
+            binding.memeView.setPadding(
+                    binding.memeView.getPaddingLeft(),
+                    binding.memeView.getPaddingTop(),
+                    binding.memeView.getPaddingRight(),
+                    nb.bottom + binding.bottomAppBar.getHeight()
+            );
+            return insets;
+        });
+
+
+        androidx.core.view.WindowInsetsControllerCompat controller =
+                new androidx.core.view.WindowInsetsControllerCompat(getWindow(), binding.getRoot());
+        controller.setAppearanceLightStatusBars(true);
+
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             getSupportActionBar().setTitle("Редактор");
         }
 
-
+        binding.fabSave.setOnClickListener(v -> {
+            v.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
+            saveCurrentMeme();
+        });
 
         viewModel = new ViewModelProvider(this).get(MemeViewModel.class);
         viewModel.getTextItems().observe(this, items -> binding.memeView.setTextItems(items));
 
-        // двойной тап по тексту -> диалог
         binding.memeView.setOnTextEditRequestListener(this::showEditDialog);
-        // по завершению перетаскивания — сохранить координаты в VM (исправляет "телепорт")
         binding.memeView.setOnTextMovedListener((index, item) -> viewModel.updateItem(index, item));
 
-        // Пикер фото
         pickImageLauncher = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
                 this::onImagePicked
@@ -77,16 +111,14 @@ public class MainActivity extends AppCompatActivity {
             viewModel.addTextCentered("Ваш текст", 32f, x, y);
             Toast.makeText(this, "Двойной тап по тексту — редактировать", Toast.LENGTH_SHORT).show();
         });
-        binding.btnSave.setOnClickListener(v -> saveCurrentMeme());
     }
+
 
     private void onImagePicked(Uri uri) {
         if (uri == null) {
             Toast.makeText(this, "Изображение не выбрано", Toast.LENGTH_SHORT).show();
             return;
         }
-
-        // Размер для семплинга: берём размеры канвы (если она ещё 0 — подставим экран)
         int tw = binding.memeView.getWidth();
         int th = binding.memeView.getHeight();
         if (tw <= 0 || th <= 0) {
@@ -94,7 +126,6 @@ public class MainActivity extends AppCompatActivity {
             tw = dm.widthPixels;
             th = dm.heightPixels;
         }
-
         Bitmap bmp = ImageLoader.loadBitmapFromUri(this, uri, tw, th);
         if (bmp == null) {
             Toast.makeText(this, "Не удалось загрузить изображение", Toast.LENGTH_SHORT).show();
@@ -111,12 +142,8 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 if (saved != null) {
                     Toast.makeText(this, "Сохранено в Галерею", Toast.LENGTH_SHORT).show();
-
-                    // >>> ДОБАВЛЕНО: пишем в историю
                     String[] tb = pickTopBottomTexts();
                     saveMemeToHistory(saved, tb[0], tb[1]);
-                    // <<<
-
                 } else {
                     Toast.makeText(this, "Не удалось сохранить", Toast.LENGTH_SHORT).show();
                 }
@@ -135,13 +162,10 @@ public class MainActivity extends AppCompatActivity {
                 bottom = live.get(1).text != null ? live.get(1).text : "";
             }
         }
-        return new String[]{ top, bottom };
+        return new String[]{top, bottom};
     }
 
-
     private void showEditDialog(int index, @NonNull TextItem item) {
-        // Если уже открыт диалог редактирования – просто игнорируем повторный дабл-тап,
-        // чтобы не пытаться добавить тот же view ещё раз.
         if (editDialog != null && editDialog.isShowing()) return;
 
         LinearLayout container = new LinearLayout(this);
@@ -167,8 +191,6 @@ public class MainActivity extends AppCompatActivity {
         sizeEt.setText(String.valueOf(item.textSizeSp));
         container.addView(sizeEt);
 
-        // --- блок выравнивания, если уже добавлял align ---
-        // Можно убрать этот блок, если он у тебя уже есть в текущей версии showEditDialog
         LinearLayout alignRow = new LinearLayout(this);
         alignRow.setOrientation(LinearLayout.HORIZONTAL);
         alignRow.setPadding(0, pad / 2, 0, 0);
@@ -190,13 +212,13 @@ public class MainActivity extends AppCompatActivity {
         alignRow.addView(rightBtn);
         container.addView(alignRow);
 
-        final int[] selectedAlign = { item.align };
+        final int[] selectedAlign = {item.align};
         Runnable refreshAlignUI = () -> {
             leftBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_LEFT);
             centerBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_CENTER);
             rightBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_RIGHT);
         };
-        android.view.View.OnClickListener alignClick = v -> {
+        View.OnClickListener alignClick = v -> {
             if (v == leftBtn) selectedAlign[0] = TextItem.ALIGN_LEFT;
             else if (v == centerBtn) selectedAlign[0] = TextItem.ALIGN_CENTER;
             else if (v == rightBtn) selectedAlign[0] = TextItem.ALIGN_RIGHT;
@@ -206,7 +228,6 @@ public class MainActivity extends AppCompatActivity {
         centerBtn.setOnClickListener(alignClick);
         rightBtn.setOnClickListener(alignClick);
         refreshAlignUI.run();
-        // --- конец блока выравнивания ---
 
         AlertDialog.Builder b = new AlertDialog.Builder(this)
                 .setTitle("Редактировать текст")
@@ -214,9 +235,11 @@ public class MainActivity extends AppCompatActivity {
                 .setPositiveButton("OK", (d, w) -> {
                     String newText = textEt.getText().toString();
                     float newSize;
-                    try { newSize = Float.parseFloat(sizeEt.getText().toString()); }
-                    catch (Exception ex) { newSize = item.textSizeSp; }
-
+                    try {
+                        newSize = Float.parseFloat(sizeEt.getText().toString());
+                    } catch (Exception ex) {
+                        newSize = item.textSizeSp;
+                    }
                     TextItem updated = new TextItem(
                             newText,
                             Math.max(8f, newSize),
@@ -235,7 +258,6 @@ public class MainActivity extends AppCompatActivity {
         editDialog.show();
     }
 
-
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
                 boolean granted = false;
@@ -246,7 +268,7 @@ public class MainActivity extends AppCompatActivity {
                     Boolean ok = result.getOrDefault(android.Manifest.permission.READ_EXTERNAL_STORAGE, false);
                     granted = ok != null && ok;
                 } else {
-                    granted = true; // на <23 уже выдано при установке
+                    granted = true;
                 }
                 if (granted) {
                     pickImageLauncher.launch("image/*");
@@ -257,7 +279,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void ensurePhotoPermissionThenPick() {
         if (android.os.Build.VERSION.SDK_INT < 23) {
-            // старые Android — разрешение уже есть
             pickImageLauncher.launch("image/*");
             return;
         }
@@ -277,11 +298,12 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
+
     private void saveMemeToHistory(@NonNull Uri savedUri, @NonNull String topText, @NonNull String bottomText) {
         new Thread(() -> {
             com.example.memegenerator.data.Meme meme =
                     new com.example.memegenerator.data.Meme(
-                            savedUri.toString(), // content:// … сохраняем строкой
+                            savedUri.toString(),
                             topText,
                             bottomText,
                             System.currentTimeMillis()
@@ -294,14 +316,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+    public boolean onOptionsItemSelected(@NonNull android.view.MenuItem item) {
         if (item.getItemId() == android.R.id.home) {
             finish();
             return true;
         }
         return super.onOptionsItemSelected(item);
     }
-
-
-
 }

@@ -3,4 +3,5 @@
     <string name="pick">Выбрать фото</string>
     <string name="add_text">Добавить текст</string>
     <string name="save">Сохранить</string>
+    <string name="editor_title">Редактор</string>
 </resources>
