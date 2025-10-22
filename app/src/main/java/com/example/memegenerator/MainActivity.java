@@ -14,12 +14,15 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.example.memegenerator.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
+
     @androidx.annotation.Nullable
     private AlertDialog editDialog;
 
@@ -35,84 +38,63 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        // Режим А: система сама вписывает контент под системные бары
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
+        // Toolbar как ActionBar
         setSupportActionBar(binding.topBar);
-
-        binding.topBar.setBackgroundColor(
-                androidx.core.content.ContextCompat.getColor(this, R.color.surface)
-        );
-
-
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, insets) -> {
-            androidx.core.graphics.Insets sb = insets.getInsets(
-                    androidx.core.view.WindowInsetsCompat.Type.statusBars());
-            androidx.core.graphics.Insets nb = insets.getInsets(
-                    androidx.core.view.WindowInsetsCompat.Type.navigationBars());
-
-            binding.topBar.setPadding(
-                    binding.topBar.getPaddingLeft(),
-                    sb.top,
-                    binding.topBar.getPaddingRight(),
-                    binding.topBar.getPaddingBottom()
-            );
-
-            binding.bottomAppBar.setPadding(
-                    binding.bottomAppBar.getPaddingLeft(),
-                    binding.bottomAppBar.getPaddingTop(),
-                    binding.bottomAppBar.getPaddingRight(),
-                    nb.bottom
-            );
-
-
-            binding.memeView.setPadding(
-                    binding.memeView.getPaddingLeft(),
-                    binding.memeView.getPaddingTop(),
-                    binding.memeView.getPaddingRight(),
-                    nb.bottom + binding.bottomAppBar.getHeight()
-            );
-            return insets;
-        });
-
-
-        androidx.core.view.WindowInsetsControllerCompat controller =
-                new androidx.core.view.WindowInsetsControllerCompat(getWindow(), binding.getRoot());
-        controller.setAppearanceLightStatusBars(true);
-
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             getSupportActionBar().setTitle("Редактор");
         }
+        binding.topBar.setNavigationOnClickListener(v ->
+                getOnBackPressedDispatcher().onBackPressed()
+        );
 
+        // Явно задаём цвета (на случай values-night)
+        binding.topBar.setBackgroundColor(ContextCompat.getColor(this, R.color.bg));
+        binding.topBar.setTitleTextColor(ContextCompat.getColor(this, R.color.on_surface));
+        binding.topBar.setNavigationIconTint(ContextCompat.getColor(this, R.color.on_surface));
+
+        // Светлые/тёмные иконки статус-бара при светлом фоне
+        new WindowInsetsControllerCompat(getWindow(), binding.getRoot())
+                .setAppearanceLightStatusBars(true);
+
+        // FAB
         binding.fabSave.setOnClickListener(v -> {
             v.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
             saveCurrentMeme();
         });
 
+        // ViewModel
         viewModel = new ViewModelProvider(this).get(MemeViewModel.class);
         viewModel.getTextItems().observe(this, items -> binding.memeView.setTextItems(items));
 
+        // Коллбеки MemeView
         binding.memeView.setOnTextEditRequestListener(this::showEditDialog);
         binding.memeView.setOnTextMovedListener((index, item) -> viewModel.updateItem(index, item));
 
+        // Выбор изображения
         pickImageLauncher = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
                 this::onImagePicked
         );
-
         binding.btnPick.setOnClickListener(v -> ensurePhotoPermissionThenPick());
 
+        // Добавить текст
         binding.btnAddText.setOnClickListener(v -> {
             float x = Math.max(40f, binding.memeView.getWidth() * 0.5f);
-            float y = Math.max(80f,  binding.memeView.getHeight() * 0.35f);
+            float y = Math.max(80f, binding.memeView.getHeight() * 0.35f);
             viewModel.addTextCentered("Ваш текст", 32f, x, y);
             Toast.makeText(this, "Двойной тап по тексту — редактировать", Toast.LENGTH_SHORT).show();
         });
-    }
 
+        // ВАЖНО: никакой ручной обработки WindowInsets тут не делаем.
+        // (Мы оставили decorFitsSystemWindows(true), всё делает система)
+    }
 
     private void onImagePicked(Uri uri) {
         if (uri == null) {
@@ -260,7 +242,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                boolean granted = false;
+                boolean granted;
                 if (android.os.Build.VERSION.SDK_INT >= 33) {
                     Boolean ok = result.getOrDefault(android.Manifest.permission.READ_MEDIA_IMAGES, false);
                     granted = ok != null && ok;
@@ -316,11 +298,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    public boolean onOptionsItemSelected(@NonNull android.view.MenuItem item) {
-        if (item.getItemId() == android.R.id.home) {
-            finish();
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
+    public boolean onSupportNavigateUp() {
+        getOnBackPressedDispatcher().onBackPressed();
+        return true;
     }
 }
