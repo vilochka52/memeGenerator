@@ -4,22 +4,22 @@
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg">
+    android:background="@drawable/bg_history_screen">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/bg"
+        android:background="@drawable/bg_glass_topbar"
         app:elevation="0dp">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/topBar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@color/bg"
+            android:background="@android:color/transparent"
             app:navigationIcon="?attr/homeAsUpIndicator"
-            app:navigationIconTint="@color/on_surface">
+            app:navigationIconTint="@color/text_primary">
 
             <TextView
                 android:id="@+id/titleText"
@@ -27,33 +27,16 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:text="Редактор"
-                android:textColor="@color/on_surface"
+                android:textColor="@color/text_primary"
                 android:textSize="20sp"
                 android:textStyle="bold" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSave"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="end"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:text="@string/save"
-                android:textAllCaps="false"
-                android:textStyle="bold"
-                android:textSize="18sp"
-                android:textColor="@color/on_surface"
-                app:cornerRadius="100dp"
-                app:iconPadding="0dp"
-                app:backgroundTint="@android:color/transparent" />
         </com.google.android.material.appbar.MaterialToolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
-    <com.example.memegenerator.MemeView
-        android:id="@+id/memeView"
+    <com.example.memegenerator.SnapForgeView
+        android:id="@+id/imageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/bg"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
     <com.google.android.material.bottomappbar.BottomAppBar
@@ -61,20 +44,20 @@
         android:layout_width="match_parent"
         android:layout_height="80dp"
         android:layout_gravity="bottom"
-        android:backgroundTint="@color/surface"
-        app:fabAlignmentMode="center"
+        app:backgroundTint="@color/glass_fill_strong"
         app:contentInsetStart="0dp"
-        app:contentInsetEnd="0dp">
+        app:contentInsetEnd="0dp"
+        app:fabAlignmentMode="center">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
             android:layout_marginStart="0dp"
-            android:layout_marginEnd="0dp">
+            android:layout_marginEnd="0dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnPick"
@@ -82,8 +65,12 @@
                 android:layout_height="52dp"
                 android:layout_weight="1"
                 android:text="@string/pick"
-                app:backgroundTint="@color/secondary"
-                android:textColor="@color/surface" />
+                android:textColor="@color/accent_text"
+                app:backgroundTint="@color/accent_glass"
+                app:cornerRadius="20dp"
+                app:iconTint="@color/accent_text"
+                app:strokeColor="@color/glass_stroke"
+                app:strokeWidth="0dp" />
 
             <Space
                 android:layout_width="8dp"
@@ -95,8 +82,12 @@
                 android:layout_height="52dp"
                 android:layout_weight="1"
                 android:text="@string/add_text"
-                app:backgroundTint="@color/secondary"
-                android:textColor="@color/surface" />
+                android:textColor="@color/text_primary"
+                app:backgroundTint="@color/glass_fill_strong"
+                app:cornerRadius="20dp"
+                app:iconTint="@color/text_primary"
+                app:strokeColor="@color/glass_stroke"
+                app:strokeWidth="1dp" />
         </LinearLayout>
     </com.google.android.material.bottomappbar.BottomAppBar>
 

@@ -1,5 +1,8 @@
 package com.example.memegenerator;
 
+import static com.example.memegenerator.ImageLoader.loadBitmapFromUri;
+
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
@@ -12,6 +15,7 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -24,7 +28,8 @@ import androidx.lifecycle.ViewModelProvider;
 import com.example.memegenerator.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
-    @androidx.annotation.Nullable
+
+    @Nullable
     private AlertDialog editDialog;
 
     private ActivityMainBinding binding;
@@ -39,56 +44,94 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
+        setupToolbar();
+        setupWindow();
+        setupViewModel();
+        setupPickImage();
+        setupButtons();
+        setupInsets();
+
+        binding.titleText.setText("Редактор");
+        binding.titleText.setTextSize(20f);
+
+        handleEditIntent();
+
+    }
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        getMenuInflater().inflate(R.menu.editor_menu, menu);
+
+        android.view.MenuItem saveItem = menu.findItem(R.id.action_save);
+        if (saveItem != null && saveItem.getIcon() != null) {
+            saveItem.getIcon().setTint(
+                    ContextCompat.getColor(this, R.color.text_primary)
+            );
+        }
+
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull android.view.MenuItem item) {
+        if (item.getItemId() == R.id.action_save) {
+            saveCurrentImage();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void setupToolbar() {
         setSupportActionBar(binding.topBar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             getSupportActionBar().setDisplayShowTitleEnabled(false);
         }
+
         binding.topBar.setNavigationOnClickListener(v ->
                 getOnBackPressedDispatcher().onBackPressed()
         );
 
-        binding.topBar.setBackgroundColor(ContextCompat.getColor(this, R.color.bg));
-        binding.topBar.setTitleTextColor(ContextCompat.getColor(this, R.color.on_surface));
-        binding.topBar.setNavigationIconTint(ContextCompat.getColor(this, R.color.on_surface));
+        binding.topBar.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        binding.topBar.setTitleTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        binding.topBar.setNavigationIconTint(ContextCompat.getColor(this, R.color.text_primary));
+    }
 
+    private void setupWindow() {
         new WindowInsetsControllerCompat(getWindow(), binding.getRoot())
                 .setAppearanceLightStatusBars(true);
+    }
 
+    private void setupViewModel() {
         viewModel = new ViewModelProvider(this).get(MemeViewModel.class);
-        viewModel.getTextItems().observe(this, items -> binding.memeView.setTextItems(items));
+        viewModel.getTextItems().observe(this, items -> binding.imageView.setTextItems(items));
 
-        binding.memeView.setOnTextEditRequestListener(this::showEditDialog);
-        binding.memeView.setOnTextMovedListener((index, item) -> viewModel.updateItem(index, item));
+        binding.imageView.setOnTextEditRequestListener(this::showEditDialog);
+        binding.imageView.setOnTextMovedListener((index, item) -> viewModel.updateItem(index, item));
+    }
 
+    private void setupPickImage() {
         pickImageLauncher = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
                 this::onImagePicked
         );
+    }
 
+    private void setupButtons() {
         binding.btnPick.setOnClickListener(v -> ensurePhotoPermissionThenPick());
 
         binding.btnAddText.setOnClickListener(v -> {
-            float x = Math.max(40f, binding.memeView.getWidth() * 0.5f);
-            float y = Math.max(80f, binding.memeView.getHeight() * 0.35f);
+            float x = Math.max(40f, binding.imageView.getWidth() * 0.5f);
+            float y = Math.max(80f, binding.imageView.getHeight() * 0.35f);
             viewModel.addTextCentered("Ваш текст", 32f, x, y);
             Toast.makeText(this, "Двойной тап по тексту — редактировать", Toast.LENGTH_SHORT).show();
         });
 
-        binding.btnSave.setEnabled(false);
-        binding.btnSave.setTextColor(ContextCompat.getColor(this, R.color.on_surface));
-        binding.btnSave.setOnClickListener(v -> {
-            if (!binding.memeView.hasImage()) {
-                Toast.makeText(this, "Сначала выберите фото", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            saveCurrentMeme();
-        });
-
         binding.bottomAppBar.post(() ->
-                binding.memeView.setContentBottomInsetPx(binding.bottomAppBar.getHeight())
+                binding.imageView.setContentBottomInsetPx(binding.bottomAppBar.getHeight())
         );
+    }
 
+    private void setupInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (view, insets) -> {
             int status = WindowInsetsCompat.Type.statusBars();
             int nav = WindowInsetsCompat.Type.navigationBars();
@@ -110,56 +153,103 @@ public class MainActivity extends AppCompatActivity {
                     nb.bottom
             );
 
-            binding.memeView.setPadding(
-                    binding.memeView.getPaddingLeft(),
-                    binding.memeView.getPaddingTop(),
-                    binding.memeView.getPaddingRight(),
+            binding.imageView.setPadding(
+                    binding.imageView.getPaddingLeft(),
+                    binding.imageView.getPaddingTop(),
+                    binding.imageView.getPaddingRight(),
                     nb.bottom + binding.bottomAppBar.getHeight()
             );
 
             return insets;
         });
-
-        binding.titleText.setText("Редактор");
-        binding.titleText.setTextSize(20f);
     }
 
-    private void onImagePicked(Uri uri) {
-        if (uri == null) {
-            Toast.makeText(this, "Изображение не выбрано", Toast.LENGTH_SHORT).show();
+    private void handleEditIntent() {
+        String editImagePath = getIntent().getStringExtra("edit_image_path");
+        String editTopText = getIntent().getStringExtra("edit_top_text");
+        String editBottomText = getIntent().getStringExtra("edit_bottom_text");
+
+        if (editImagePath == null || editImagePath.trim().isEmpty()) {
             return;
         }
-        int tw = binding.memeView.getWidth();
-        int th = binding.memeView.getHeight();
+
+        Uri uri = Uri.parse(editImagePath);
+        loadProjectFromHistory(uri, editTopText, editBottomText);
+    }
+
+    private void loadProjectFromHistory(@NonNull Uri uri, @Nullable String topText, @Nullable String bottomText) {
+        int tw = binding.imageView.getWidth();
+        int th = binding.imageView.getHeight();
+
         if (tw <= 0 || th <= 0) {
             var dm = getResources().getDisplayMetrics();
             tw = dm.widthPixels;
             th = dm.heightPixels;
         }
-        Bitmap bmp = ImageLoader.loadBitmapFromUri(this, uri, tw, th);
+
+        Bitmap bmp = loadBitmapFromUri(this, uri, tw, th);
+        if (bmp == null) {
+            Toast.makeText(this, "Не удалось открыть проект", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        binding.imageView.addImageBitmap(bmp);
+
+        binding.imageView.post(() -> {
+            float centerX = Math.max(40f, binding.imageView.getWidth() * 0.5f);
+
+            if (topText != null && !topText.trim().isEmpty()) {
+                float topY = Math.max(80f, binding.imageView.getHeight() * 0.25f);
+                viewModel.addTextCentered(topText, 32f, centerX, topY);
+            }
+
+            if (bottomText != null && !bottomText.trim().isEmpty()) {
+                float bottomY = Math.max(80f, binding.imageView.getHeight() * 0.75f);
+                viewModel.addTextCentered(bottomText, 32f, centerX, bottomY);
+            }
+        });
+    }
+
+    private void onImagePicked(@Nullable Uri uri) {
+        if (uri == null) {
+            Toast.makeText(this, "Изображение не выбрано", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        int tw = binding.imageView.getWidth();
+        int th = binding.imageView.getHeight();
+        if (tw <= 0 || th <= 0) {
+            var dm = getResources().getDisplayMetrics();
+            tw = dm.widthPixels;
+            th = dm.heightPixels;
+        }
+
+        Bitmap bmp = loadBitmapFromUri(this, uri, tw, th);
         if (bmp == null) {
             Toast.makeText(this, "Не удалось загрузить изображение", Toast.LENGTH_SHORT).show();
             return;
         }
-        binding.memeView.addImageBitmap(bmp);
-        binding.btnSave.setEnabled(true);
-        binding.btnSave.setTextColor(ContextCompat.getColor(this, R.color.on_surface));
+
+        binding.imageView.addImageBitmap(bmp);
     }
 
-    private void saveCurrentMeme() {
-        if (!binding.memeView.hasImage()) {
+    private void saveCurrentImage() {
+        if (!binding.imageView.hasImage()) {
             Toast.makeText(this, "Сначала выберите фото", Toast.LENGTH_SHORT).show();
             return;
         }
-        Bitmap out = binding.memeView.exportToBitmapAtOriginal();
+
+        Bitmap out = binding.imageView.exportToBitmapAtOriginal();
         new Thread(() -> {
             Uri saved = MemeRepository.saveBitmapToGallery(
-                    this, out, "meme_" + System.currentTimeMillis() + ".png");
+                    this, out, "snapforge_" + System.currentTimeMillis() + ".png"
+            );
+
             runOnUiThread(() -> {
                 if (saved != null) {
                     Toast.makeText(this, "Сохранено в Галерею", Toast.LENGTH_SHORT).show();
                     String[] tb = pickTopBottomTexts();
-                    saveMemeToHistory(saved, tb[0], tb[1]);
+                    saveProjectToHistory(saved, tb[0], tb[1]);
                 } else {
                     Toast.makeText(this, "Не удалось сохранить", Toast.LENGTH_SHORT).show();
                 }
@@ -172,12 +262,14 @@ public class MainActivity extends AppCompatActivity {
         var live = viewModel.getTextItems().getValue();
         String top = "";
         String bottom = "";
+
         if (live != null && !live.isEmpty()) {
             top = live.get(0).text != null ? live.get(0).text : "";
             if (live.size() > 1) {
                 bottom = live.get(1).text != null ? live.get(1).text : "";
             }
         }
+
         return new String[]{top, bottom};
     }
 
@@ -234,12 +326,14 @@ public class MainActivity extends AppCompatActivity {
             centerBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_CENTER);
             rightBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_RIGHT);
         };
+
         View.OnClickListener alignClick = v -> {
             if (v == leftBtn) selectedAlign[0] = TextItem.ALIGN_LEFT;
             else if (v == centerBtn) selectedAlign[0] = TextItem.ALIGN_CENTER;
             else if (v == rightBtn) selectedAlign[0] = TextItem.ALIGN_RIGHT;
             refreshAlignUI.run();
         };
+
         leftBtn.setOnClickListener(alignClick);
         centerBtn.setOnClickListener(alignClick);
         rightBtn.setOnClickListener(alignClick);
@@ -256,10 +350,12 @@ public class MainActivity extends AppCompatActivity {
                     } catch (Exception ex) {
                         newSize = item.textSizeSp;
                     }
+
                     TextItem updated = new TextItem(
                             newText,
                             Math.max(8f, newSize),
-                            item.x, item.y,
+                            item.x,
+                            item.y,
                             item.typefaceStyle,
                             item.color,
                             selectedAlign[0]
@@ -277,6 +373,7 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
                 boolean granted;
+
                 if (android.os.Build.VERSION.SDK_INT >= 33) {
                     Boolean ok = result.getOrDefault(android.Manifest.permission.READ_MEDIA_IMAGES, false);
                     granted = ok != null && ok;
@@ -286,6 +383,7 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     granted = true;
                 }
+
                 if (granted) {
                     pickImageLauncher.launch("image/*");
                 } else {
@@ -298,6 +396,7 @@ public class MainActivity extends AppCompatActivity {
             pickImageLauncher.launch("image/*");
             return;
         }
+
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             if (checkSelfPermission(android.Manifest.permission.READ_MEDIA_IMAGES)
                     == android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -315,19 +414,20 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void saveMemeToHistory(@NonNull Uri savedUri, @NonNull String topText, @NonNull String bottomText) {
+    private void saveProjectToHistory(@NonNull Uri savedUri, @NonNull String topText, @NonNull String bottomText) {
         new Thread(() -> {
-            com.example.memegenerator.data.Meme meme =
+            com.example.memegenerator.data.Meme item =
                     new com.example.memegenerator.data.Meme(
                             savedUri.toString(),
                             topText,
                             bottomText,
                             System.currentTimeMillis()
                     );
+
             com.example.memegenerator.data.MemeDatabase
                     .getInstance(getApplicationContext())
                     .memeDao()
-                    .insert(meme);
+                    .insert(item);
         }).start();
     }
 

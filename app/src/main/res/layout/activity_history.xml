@@ -1,56 +1,94 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:fitsSystemWindows="false"
-    android:background="@color/bg"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_history_screen"
+    android:fitsSystemWindows="false">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/bg"
-        app:elevation="0dp">
-
+        android:background="@drawable/bg_glass_topbar"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        app:elevation="0dp"
+        app:liftOnScroll="false">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/historyTopBar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            app:title="Мои мемы"
-            app:titleTextColor="@color/on_surface"
+            android:layout_height="64dp"
+            android:background="@android:color/transparent"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            app:navigationIconTint="@color/on_surface"
+            app:title="Мои проекты"
             app:titleCentered="true"
-            app:navigationIconTint="@color/on_surface"/>
+            app:titleTextColor="@color/on_surface" />
+
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/memeRecycler"
+        android:id="@+id/imageRecycler"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
         android:clipToPadding="false"
-        android:paddingBottom="96dp"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior"/>
+        android:paddingTop="20dp"
+        android:paddingBottom="104dp"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
-    <TextView
+    <LinearLayout
         android:id="@+id/emptyView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Здесь появятся ваши мемы"
-        android:textColor="@color/on_surface"
-        android:textSize="16sp"
-        android:layout_gravity="center"/>
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/emptyTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Пока пусто"
+            android:textColor="@color/on_surface"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/emptySubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="Здесь будут сохранённые проекты SnapForge"
+            android:textColor="@color/on_surface_secondary"
+            android:textSize="14sp" />
+    </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fabCreate"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Создать мем"
-        app:icon="@android:drawable/ic_input_add"
-        app:iconPadding="12dp"
-        app:layout_anchorGravity="bottom|center_horizontal"
+        android:layout_height="56dp"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_margin="16dp"/>
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="24dp"
+        android:elevation="0dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:text="Создать проект"
+        android:textAllCaps="false"
+        android:textColor="@color/accent_text"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        app:backgroundTint="@color/accent_glass"
+        app:cornerRadius="28dp"
+        app:elevation="0dp"
+        app:icon="@android:drawable/ic_input_add"
+        app:iconPadding="10dp"
+        app:iconTint="@color/accent_text" />
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

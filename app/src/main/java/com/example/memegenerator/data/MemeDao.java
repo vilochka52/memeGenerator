@@ -3,7 +3,7 @@ package com.example.memegenerator.data;
 import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.Query;
-
+import androidx.room.Delete;
 import java.util.List;
 
 @Dao
@@ -16,4 +16,7 @@ public interface MemeDao {
 
     @Query("DELETE FROM memes")
     void clearAll();
+
+    @Delete
+    void delete(Meme item);
 }

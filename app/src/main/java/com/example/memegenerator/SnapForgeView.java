@@ -26,7 +26,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class MemeView extends View {
+public class SnapForgeView extends View {
     @Nullable private Bitmap baseOriginal = null;
     private final Matrix imageMatrix = new Matrix();
     private final RectF srcRect = new RectF();
@@ -63,17 +63,17 @@ public class MemeView extends View {
     private OnTextEditRequestListener editListener;
     private OnTextMovedListener movedListener;
 
-    public MemeView(Context c) {
+    public SnapForgeView(Context c) {
         super(c);
         gestureDetector = createGestureDetector(c);
         init();
     }
-    public MemeView(Context c, AttributeSet a) {
+    public SnapForgeView(Context c, AttributeSet a) {
         super(c, a);
         gestureDetector = createGestureDetector(c);
         init();
     }
-    public MemeView(Context c, AttributeSet a, int s) {
+    public SnapForgeView(Context c, AttributeSet a, int s) {
         super(c, a, s);
         gestureDetector = createGestureDetector(c);
         init();

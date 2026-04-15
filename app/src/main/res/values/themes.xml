@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.MemeGenerator" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.SnapForge" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
@@ -29,5 +29,10 @@
         <item name="cardCornerRadius">16dp</item>
         <item name="cardUseCompatPadding">true</item>
         <item name="cardElevation">2dp</item>
+    </style>
+
+    <style name="ShapeAppearance.SnapForge.Image" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">20dp</item>
     </style>
 </resources>

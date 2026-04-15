@@ -1,7 +1,9 @@
 <resources>
-    <string name="app_name">Meme Generator</string>
+    <string name="app_name">SnapForge</string>
     <string name="pick">Выбрать фото</string>
     <string name="add_text">Добавить текст</string>
     <string name="save">Сохранить</string>
     <string name="editor_title">Редактор</string>
+    <string name="edit_project">Редактировать проект</string>
+    <string name="delete_project">Удалить проект</string>
 </resources>
