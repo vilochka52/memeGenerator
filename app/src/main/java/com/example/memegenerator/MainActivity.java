@@ -57,6 +57,11 @@ public class MainActivity extends AppCompatActivity {
         setupImagePicker();
         setupButtons();
         handleEditIntent();
+
+        String newProjectName = getIntent().getStringExtra("new_project_name");
+        if (newProjectName != null && !newProjectName.trim().isEmpty()) {
+            currentProjectName = newProjectName;
+        }
     }
 
     private void setupToolbar() {

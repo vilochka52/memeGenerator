@@ -50,6 +50,12 @@ public class HistoryActivity extends AppCompatActivity {
         loadProjects();
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadProjects();
+    }
+
     private void setupInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, insets) -> {
             androidx.core.graphics.Insets statusBars =
@@ -248,4 +254,5 @@ public class HistoryActivity extends AppCompatActivity {
         finish();
         return true;
     }
+
 }
