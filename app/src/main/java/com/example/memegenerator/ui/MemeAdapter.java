@@ -2,140 +2,90 @@ package com.example.memegenerator.ui;
 
 import android.net.Uri;
 import android.view.LayoutInflater;
-import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageButton;
-import android.widget.ImageView;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.memegenerator.R;
 import com.example.memegenerator.data.Meme;
+import com.example.memegenerator.databinding.ItemMemeBinding;
 
-import java.util.ArrayList;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
-public class MemeAdapter extends RecyclerView.Adapter<MemeAdapter.VH> {
+public class MemeAdapter extends RecyclerView.Adapter<MemeAdapter.MemeViewHolder> {
 
-    public interface OnProjectActionListener {
-        void onOpenImage(Meme item);
-
-        void onEditClick(Meme item);
-
-        void onDeleteClick(Meme item);
+    public interface Listener {
+        void onOpen(Meme item);
+        void onEdit(Meme item);
+        void onDelete(Meme item);
+        void onRename(Meme item);
     }
 
-    private final List<Meme> data = new ArrayList<>();
-    private final OnProjectActionListener listener;
+    private final List<Meme> items;
+    private final Listener listener;
+    private final SimpleDateFormat dateFormat =
+            new SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault());
 
-    public MemeAdapter(List<Meme> initial, OnProjectActionListener listener) {
-        if (initial != null) {
-            data.addAll(initial);
-        }
+    public MemeAdapter(List<Meme> items, Listener listener) {
+        this.items = items;
         this.listener = listener;
-    }
-
-    public void submit(List<Meme> items) {
-        data.clear();
-        if (items != null) {
-            data.addAll(items);
-        }
-        notifyDataSetChanged();
     }
 
     @NonNull
     @Override
-    public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.item_meme, parent, false);
-        return new VH(view);
+    public MemeViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        ItemMemeBinding binding = ItemMemeBinding.inflate(
+                LayoutInflater.from(parent.getContext()),
+                parent,
+                false
+        );
+        return new MemeViewHolder(binding);
     }
 
     @Override
-    public void onBindViewHolder(@NonNull VH holder, int position) {
-        Meme item = data.get(position);
+    public void onBindViewHolder(@NonNull MemeViewHolder holder, int position) {
+        Meme item = items.get(position);
 
-        String title = item.topText != null ? item.topText.trim() : "";
-        String subtitle = item.bottomText != null ? item.bottomText.trim() : "";
+        String name = item.projectName != null && !item.projectName.trim().isEmpty()
+                ? item.projectName
+                : "Без названия";
 
-        if (title.isEmpty() && subtitle.isEmpty()) {
-            holder.top.setText("Проект без названия");
-            holder.bottom.setText("Без добавленного текста");
-            holder.bottom.setVisibility(View.VISIBLE);
-        } else if (title.isEmpty()) {
-            holder.top.setText("Проект");
-            holder.bottom.setText(subtitle);
-            holder.bottom.setVisibility(View.VISIBLE);
+        String date = dateFormat.format(new Date(item.createdAt));
+
+        holder.binding.topText.setText(name);
+        holder.binding.bottomText.setText("Нажми, чтобы переименовать");
+        holder.binding.dateText.setText(date);
+
+        if (item.previewImagePath != null && !item.previewImagePath.trim().isEmpty()) {
+            holder.binding.thumb.setImageURI(Uri.parse(item.previewImagePath));
         } else {
-            holder.top.setText(title);
-            if (subtitle.isEmpty()) {
-                holder.bottom.setVisibility(View.GONE);
-            } else {
-                holder.bottom.setText(subtitle);
-                holder.bottom.setVisibility(View.VISIBLE);
-            }
+            holder.binding.thumb.setImageDrawable(null);
         }
-        holder.date.setText(HistoryActivity.formatDate(item.createdAt));
-        holder.thumb.setImageURI(Uri.parse(item.imagePath));
 
-        holder.itemView.setOnClickListener(v -> {
-            v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
-            if (listener != null) {
-                listener.onOpenImage(item);
-            }
-        });
+        holder.binding.historyCard.setOnClickListener(v -> listener.onOpen(item));
 
-        holder.itemView.setOnTouchListener((v, event) -> {
-            switch (event.getAction()) {
-                case android.view.MotionEvent.ACTION_DOWN:
-                    v.animate().scaleX(0.98f).scaleY(0.98f).setDuration(120).start();
-                    break;
-                case android.view.MotionEvent.ACTION_UP:
-                case android.view.MotionEvent.ACTION_CANCEL:
-                    v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
-                    break;
-            }
-            return false;
-        });
+        holder.binding.editButton.setOnClickListener(v -> listener.onEdit(item));
 
-        holder.deleteButton.setOnClickListener(v -> {
-            v.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
-            if (listener != null) {
-                listener.onDeleteClick(item);
-            }
-        });
+        holder.binding.deleteButton.setOnClickListener(v -> listener.onDelete(item));
 
-        holder.editButton.setOnClickListener(v -> {
-            v.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
-            if (listener != null) {
-                listener.onEditClick(item);
-            }
-        });
+        holder.binding.topText.setOnClickListener(v -> listener.onRename(item));
+        holder.binding.bottomText.setOnClickListener(v -> listener.onRename(item));
     }
 
     @Override
     public int getItemCount() {
-        return data.size();
+        return items.size();
     }
 
-    static class VH extends RecyclerView.ViewHolder {
-        ImageView thumb;
-        ImageButton editButton;
-        ImageButton deleteButton;
-        TextView top;
-        TextView bottom;
-        TextView date;
+    static class MemeViewHolder extends RecyclerView.ViewHolder {
+        final ItemMemeBinding binding;
 
-        VH(@NonNull View itemView) {
-            super(itemView);
-            thumb = itemView.findViewById(R.id.thumb);
-            editButton = itemView.findViewById(R.id.editButton);
-            deleteButton = itemView.findViewById(R.id.deleteButton);
-            top = itemView.findViewById(R.id.topText);
-            bottom = itemView.findViewById(R.id.bottomText);
-            date = itemView.findViewById(R.id.dateText);
+        MemeViewHolder(ItemMemeBinding binding) {
+            super(binding.getRoot());
+            this.binding = binding;
         }
     }
 }

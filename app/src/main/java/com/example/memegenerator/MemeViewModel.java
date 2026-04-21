@@ -3,51 +3,102 @@ package com.example.memegenerator;
 import android.graphics.Color;
 import android.graphics.Typeface;
 
-import androidx.annotation.NonNull;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
+import java.util.Stack;
 
 public class MemeViewModel extends ViewModel {
 
-    private final MutableLiveData<List<TextItem>> textItems = new MutableLiveData<>(new ArrayList<>());
+    private final MutableLiveData<List<TextItem>> textItems =
+            new MutableLiveData<>(new ArrayList<>());
 
-    public LiveData<List<TextItem>> getTextItems() { return textItems; }
+    private final Stack<List<TextItem>> undoStack = new Stack<>();
+    private final Stack<List<TextItem>> redoStack = new Stack<>();
 
-    public void addText(@NonNull String text, float sizeSp) {
-        List<TextItem> cur = new ArrayList<>(Objects.requireNonNull(textItems.getValue()));
-        cur.add(new TextItem(text, sizeSp, 80f, 120f, Typeface.BOLD, Color.WHITE));
-        textItems.setValue(cur);
-    }public void removeItem(int index) {
-        List<TextItem> cur = textItems.getValue();
-        if (cur == null || index < 0 || index >= cur.size()) return;
-
-        // создаём копию, чтобы триггернуть LiveData
-        List<TextItem> copy = new ArrayList<>(cur);
-        copy.remove(index);
-        textItems.setValue(copy); // мы на UI-потоке
+    public LiveData<List<TextItem>> getTextItems() {
+        return textItems;
     }
 
-    
-    public void addTextCentered(@NonNull String text, float sizeSp, float x, float y) {
-        List<TextItem> cur = new ArrayList<>(Objects.requireNonNull(textItems.getValue()));
-        cur.add(new TextItem(text, sizeSp, x, y, Typeface.BOLD, Color.WHITE));
-        textItems.setValue(cur);
+    private List<TextItem> copy(List<TextItem> src) {
+        if (src == null) return new ArrayList<>();
+        return new ArrayList<>(src);
     }
 
-    public void updateItem(int index, @NonNull TextItem item) {
-        List<TextItem> cur = new ArrayList<>(Objects.requireNonNull(textItems.getValue()));
-        if (index >= 0 && index < cur.size()) {
-            cur.set(index, item);
-            textItems.setValue(cur);
+    private void saveState() {
+        undoStack.push(copy(textItems.getValue()));
+        redoStack.clear();
+    }
+
+    public void clearAll() {
+        textItems.postValue(new ArrayList<>());
+        undoStack.clear();
+        redoStack.clear();
+    }
+
+    public void setItems(List<TextItem> items) {
+        textItems.postValue(copy(items));
+        undoStack.clear();
+        redoStack.clear();
+    }
+
+    public void addTextCentered(String text, float size, float x, float y) {
+        saveState();
+
+        List<TextItem> list = copy(textItems.getValue());
+        list.add(new TextItem(
+                text,
+                size,
+                x,
+                y,
+                Typeface.NORMAL,
+                Color.WHITE,
+                TextItem.ALIGN_CENTER,
+                0f
+        ));
+        textItems.setValue(list);
+    }
+
+    public void updateItem(int index, TextItem item) {
+        List<TextItem> current = copy(textItems.getValue());
+        if (index < 0 || index >= current.size()) return;
+
+        saveState();
+        current.set(index, item);
+        textItems.setValue(current);
+    }
+
+    public void removeItem(int index) {
+        List<TextItem> current = copy(textItems.getValue());
+        if (index < 0 || index >= current.size()) return;
+
+        saveState();
+        current.remove(index);
+        textItems.setValue(current);
+    }
+
+    public void undo() {
+        if (!undoStack.isEmpty()) {
+            redoStack.push(copy(textItems.getValue()));
+            textItems.setValue(undoStack.pop());
         }
     }
 
-    public void replaceAll(@NonNull List<TextItem> newItems) {
-        textItems.setValue(new ArrayList<>(newItems));
+    public void redo() {
+        if (!redoStack.isEmpty()) {
+            undoStack.push(copy(textItems.getValue()));
+            textItems.setValue(redoStack.pop());
+        }
+    }
+
+    public String exportToJson() {
+        List<TextItem> list = textItems.getValue();
+        if (list == null) {
+            list = new ArrayList<>();
+        }
+        return new com.google.gson.Gson().toJson(list);
     }
 }

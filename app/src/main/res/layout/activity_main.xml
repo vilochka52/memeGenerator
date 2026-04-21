@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
     android:layout_width="match_parent"
@@ -11,26 +12,17 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_glass_topbar"
-        app:elevation="0dp">
+        android:elevation="0dp">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/topBar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@android:color/transparent"
-            app:navigationIcon="?attr/homeAsUpIndicator"
-            app:navigationIconTint="@color/text_primary">
-
-            <TextView
-                android:id="@+id/titleText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="Редактор"
-                android:textColor="@color/text_primary"
-                android:textSize="20sp"
-                android:textStyle="bold" />
-        </com.google.android.material.appbar.MaterialToolbar>
+            android:title="Редактор"
+            android:titleTextColor="@color/text_primary"
+            app:titleCentered="true"
+            app:navigationIcon="?attr/homeAsUpIndicator" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <com.example.memegenerator.SnapForgeView
@@ -39,56 +31,64 @@
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
-    <com.google.android.material.bottomappbar.BottomAppBar
-        android:id="@+id/bottomAppBar"
+    <LinearLayout
+        android:id="@+id/bottomBar"
         android:layout_width="match_parent"
-        android:layout_height="80dp"
+        android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        app:backgroundTint="@color/glass_fill_strong"
-        app:contentInsetStart="0dp"
-        app:contentInsetEnd="0dp"
-        app:fabAlignmentMode="center">
+        android:background="@color/glass_fill_strong"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="10dp">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_marginStart="0dp"
-            android:layout_marginEnd="0dp"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp">
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnPick"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="Фото"
+            android:textColor="@color/accent_text"
+            app:backgroundTint="@color/accent_glass"
+            app:cornerRadius="20dp"
+            app:strokeWidth="0dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPick"
-                android:layout_width="0dp"
-                android:layout_height="52dp"
-                android:layout_weight="1"
-                android:text="@string/pick"
-                android:textColor="@color/accent_text"
-                app:backgroundTint="@color/accent_glass"
-                app:cornerRadius="20dp"
-                app:iconTint="@color/accent_text"
-                app:strokeColor="@color/glass_stroke"
-                app:strokeWidth="0dp" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddText"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="Текст"
+            android:textColor="@color/accent_text"
+            app:backgroundTint="@color/accent_glass"
+            app:cornerRadius="20dp"
+            app:strokeWidth="0dp" />
 
-            <Space
-                android:layout_width="8dp"
-                android:layout_height="0dp" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnUndo"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="↶"
+            android:textColor="@color/accent_text"
+            app:backgroundTint="@color/accent_glass"
+            app:cornerRadius="20dp"
+            app:strokeWidth="0dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnAddText"
-                android:layout_width="0dp"
-                android:layout_height="52dp"
-                android:layout_weight="1"
-                android:text="@string/add_text"
-                android:textColor="@color/text_primary"
-                app:backgroundTint="@color/glass_fill_strong"
-                app:cornerRadius="20dp"
-                app:iconTint="@color/text_primary"
-                app:strokeColor="@color/glass_stroke"
-                app:strokeWidth="1dp" />
-        </LinearLayout>
-    </com.google.android.material.bottomappbar.BottomAppBar>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRedo"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="↷"
+            android:textColor="@color/accent_text"
+            app:backgroundTint="@color/accent_glass"
+            app:cornerRadius="20dp"
+            app:strokeWidth="0dp" />
+    </LinearLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

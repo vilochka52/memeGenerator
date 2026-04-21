@@ -1,13 +1,9 @@
 package com.example.memegenerator;
 
-import static com.example.memegenerator.ImageLoader.loadBitmapFromUri;
-
-import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
-import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
@@ -22,47 +18,474 @@ import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.lifecycle.ViewModelProvider;
 
+import com.example.memegenerator.data.Meme;
+import com.example.memegenerator.data.MemeDatabase;
 import com.example.memegenerator.databinding.ActivityMainBinding;
 
-public class MainActivity extends AppCompatActivity {
+import org.json.JSONArray;
+import org.json.JSONObject;
 
-    @Nullable
-    private AlertDialog editDialog;
+import java.util.ArrayList;
+import java.util.List;
+
+public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
     private MemeViewModel viewModel;
     private ActivityResultLauncher<String> pickImageLauncher;
 
+    private long editingMemeId = -1L;
+    private boolean isEditingExistingProject = false;
+    @Nullable
+    private String currentOriginalImagePath = null;
+    private String currentProjectName = "";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
         setupToolbar();
-        setupWindow();
-        setupViewModel();
-        setupPickImage();
-        setupButtons();
         setupInsets();
-
-        binding.titleText.setText("Редактор");
-        binding.titleText.setTextSize(20f);
-
+        setupViewModel();
+        setupImagePicker();
+        setupButtons();
         handleEditIntent();
-
     }
+
+    private void setupToolbar() {
+        setSupportActionBar(binding.topBar);
+
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setDisplayShowTitleEnabled(true);
+        }
+
+        binding.topBar.setNavigationOnClickListener(v -> finish());
+
+        binding.topBar.setNavigationIconTint(
+                ContextCompat.getColor(this, R.color.text_primary)
+        );
+
+        binding.topBar.setTitleTextColor(
+                ContextCompat.getColor(this, R.color.text_primary)
+        );
+    }
+
+    private void setupInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root, (v, insets) -> {
+            androidx.core.graphics.Insets statusBars =
+                    insets.getInsets(WindowInsetsCompat.Type.statusBars());
+            androidx.core.graphics.Insets navBars =
+                    insets.getInsets(WindowInsetsCompat.Type.navigationBars());
+
+            binding.appbar.setPadding(
+                    binding.appbar.getPaddingLeft(),
+                    statusBars.top,
+                    binding.appbar.getPaddingRight(),
+                    binding.appbar.getPaddingBottom()
+            );
+
+            binding.bottomBar.setPadding(
+                    binding.bottomBar.getPaddingLeft(),
+                    binding.bottomBar.getPaddingTop(),
+                    binding.bottomBar.getPaddingRight(),
+                    navBars.bottom
+            );
+
+            int bottomInset = binding.bottomBar.getMeasuredHeight() + navBars.bottom;
+
+            binding.imageView.setPadding(
+                    binding.imageView.getPaddingLeft(),
+                    binding.imageView.getPaddingTop(),
+                    binding.imageView.getPaddingRight(),
+                    bottomInset
+            );
+
+            binding.imageView.setContentBottomInsetPx(bottomInset);
+
+            return insets;
+        });
+    }
+
+    private void setupViewModel() {
+        viewModel = new ViewModelProvider(this).get(MemeViewModel.class);
+
+        viewModel.getTextItems().observe(this, items -> binding.imageView.setTextItems(items));
+
+        binding.imageView.setOnTextEditRequestListener(this::showEditDialog);
+
+        binding.imageView.setOnTextMoveFinishedListener((index, oldItem, newItem) ->
+                viewModel.updateItem(index, newItem)
+        );
+    }
+
+    private void setupImagePicker() {
+        pickImageLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri == null) return;
+
+                    Uri localUri = copyPickedImageToAppStorage(uri);
+                    if (localUri == null) {
+                        Toast.makeText(this, "Не удалось сохранить фото в память приложения", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    int targetW = Math.max(binding.imageView.getWidth(), 1080);
+                    int targetH = Math.max(binding.imageView.getHeight(), 1920);
+
+                    Bitmap bmp = ImageLoader.loadBitmapFromUri(this, localUri, targetW, targetH);
+                    if (bmp == null) {
+                        Toast.makeText(this, "Не удалось загрузить фото", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    currentOriginalImagePath = localUri.toString();
+                    binding.imageView.addImageBitmap(bmp);
+                }
+        );
+    }
+
+    @Nullable
+    private Uri copyPickedImageToAppStorage(@NonNull Uri sourceUri) {
+        try {
+            java.io.InputStream inputStream = getContentResolver().openInputStream(sourceUri);
+            if (inputStream == null) return null;
+
+            java.io.File dir = new java.io.File(getFilesDir(), "source_images");
+            if (!dir.exists() && !dir.mkdirs()) {
+                inputStream.close();
+                return null;
+            }
+
+            String fileName = "src_" + System.currentTimeMillis() + ".jpg";
+            java.io.File outFile = new java.io.File(dir, fileName);
+
+            java.io.OutputStream outputStream = new java.io.FileOutputStream(outFile);
+
+            byte[] buffer = new byte[8192];
+            int len;
+            while ((len = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, len);
+            }
+
+            outputStream.flush();
+            outputStream.close();
+            inputStream.close();
+
+            return Uri.fromFile(outFile);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private void setupButtons() {
+        binding.btnPick.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
+
+        binding.btnAddText.setOnClickListener(v -> {
+            float centerX = binding.imageView.getWidth() / 2f;
+            float centerY = binding.imageView.getHeight() / 2f;
+            viewModel.addTextCentered("Ваш текст", 28f, centerX, centerY);
+        });
+
+        binding.btnUndo.setOnClickListener(v -> viewModel.undo());
+        binding.btnRedo.setOnClickListener(v -> viewModel.redo());
+    }
+
+    private void handleEditIntent() {
+        String editOriginalImagePath = getIntent().getStringExtra("edit_original_image_path");
+        String editPreviewImagePath = getIntent().getStringExtra("edit_preview_image_path");
+        String editTextItemsJson = getIntent().getStringExtra("edit_text_items_json");
+        String editProjectName = getIntent().getStringExtra("edit_project_name");
+        long memeId = getIntent().getLongExtra("edit_meme_id", -1L);
+
+        if ((editOriginalImagePath == null || editOriginalImagePath.trim().isEmpty())
+                && (editPreviewImagePath == null || editPreviewImagePath.trim().isEmpty())) {
+            return;
+        }
+
+        editingMemeId = memeId;
+        isEditingExistingProject = memeId != -1L;
+        currentProjectName = editProjectName != null ? editProjectName : "";
+
+        String pathToOpen = editOriginalImagePath;
+        if (pathToOpen == null || pathToOpen.trim().isEmpty()) {
+            pathToOpen = editPreviewImagePath;
+        }
+
+        loadProjectForEdit(Uri.parse(pathToOpen), editTextItemsJson);
+    }
+
+    private void loadProjectForEdit(@NonNull Uri uri, @Nullable String textItemsJson) {
+        binding.imageView.post(() -> {
+            int targetW = Math.max(binding.imageView.getWidth(), 1080);
+            int targetH = Math.max(binding.imageView.getHeight(), 1920);
+
+            Bitmap bmp = null;
+
+            try {
+                bmp = ImageLoader.loadBitmapFromUri(this, uri, targetW, targetH);
+            } catch (Exception ignored) {
+            }
+
+            if (bmp == null) {
+                String previewPath = getIntent().getStringExtra("edit_overlay_image_path");
+                if (previewPath != null && !previewPath.trim().isEmpty()) {
+                    try {
+                        bmp = ImageLoader.loadBitmapFromUri(this, Uri.parse(previewPath), targetW, targetH);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+
+            if (bmp == null) {
+                Toast.makeText(this, "Не удалось открыть проект", Toast.LENGTH_SHORT).show();
+                finish();
+                return;
+            }
+
+            binding.imageView.addImageBitmap(bmp);
+
+            List<TextItem> restored = parseTextItemsJson(textItemsJson);
+            viewModel.setItems(restored);
+        });
+    }
+
+    @NonNull
+    private List<TextItem> parseTextItemsJson(@Nullable String json) {
+        List<TextItem> result = new ArrayList<>();
+
+        if (json == null || json.trim().isEmpty()) {
+            return result;
+        }
+
+        try {
+            JSONArray array = new JSONArray(json);
+
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject o = array.getJSONObject(i);
+
+                String text = o.optString("text", "Текст");
+                float textSizeSp = (float) o.optDouble("textSizeSp", 28f);
+                float x = (float) o.optDouble("x", 0f);
+                float y = (float) o.optDouble("y", 0f);
+                int typefaceStyle = o.optInt("typefaceStyle", 0);
+                int color = o.optInt("color", 0xFFFFFFFF);
+                int align = o.optInt("align", TextItem.ALIGN_CENTER);
+                float boxWidth = (float) o.optDouble("boxWidth", 0f);
+
+                result.add(new TextItem(
+                        text,
+                        textSizeSp,
+                        x,
+                        y,
+                        typefaceStyle,
+                        color,
+                        align,
+                        boxWidth
+                ));
+            }
+        } catch (Exception ignored) {
+        }
+
+        return result;
+    }
+
+    @NonNull
+    private String buildTextItemsJson() {
+        JSONArray array = new JSONArray();
+
+        List<TextItem> items = viewModel.getTextItems().getValue();
+        if (items == null) return array.toString();
+
+        try {
+            for (TextItem item : items) {
+                JSONObject o = new JSONObject();
+                o.put("text", item.text);
+                o.put("textSizeSp", item.textSizeSp);
+                o.put("x", item.x);
+                o.put("y", item.y);
+                o.put("typefaceStyle", item.typefaceStyle);
+                o.put("color", item.color);
+                o.put("align", item.align);
+                o.put("boxWidth", item.boxWidth);
+                array.put(o);
+            }
+        } catch (Exception ignored) {
+        }
+
+        return array.toString();
+    }
+
+    private void saveImage() {
+        if (!binding.imageView.hasImage()) {
+            Toast.makeText(this, "Сначала выберите фото", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Bitmap previewBitmap = binding.imageView.exportToBitmapAtOriginal();
+        Bitmap originalOnlyBitmap = binding.imageView.exportBaseImageAtOriginal();
+
+        if (previewBitmap == null || originalOnlyBitmap == null) {
+            Toast.makeText(this, "Ошибка подготовки изображения", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                String projectNameToSave = currentProjectName;
+                if (projectNameToSave == null || projectNameToSave.trim().isEmpty()) {
+                    projectNameToSave = "Новый проект";
+                }
+
+                Uri originalSaved = MemeRepository.saveBitmapToGallery(
+                        this,
+                        originalOnlyBitmap,
+                        "original_" + System.currentTimeMillis() + ".png"
+                );
+
+                Uri previewSaved = MemeRepository.saveBitmapToGallery(
+                        this,
+                        previewBitmap,
+                        "project_" + System.currentTimeMillis() + ".png"
+                );
+
+                if (originalSaved == null || previewSaved == null) {
+                    runOnUiThread(() ->
+                            Toast.makeText(this, "Ошибка сохранения", Toast.LENGTH_SHORT).show()
+                    );
+                    return;
+                }
+
+                String textItemsJson = viewModel.exportToJson();
+
+                MemeDatabase db = MemeDatabase.getInstance(getApplicationContext());
+
+                if (isEditingExistingProject && editingMemeId != -1L) {
+                    Meme updated = new Meme(
+                            projectNameToSave,
+                            originalSaved.toString(),
+                            previewSaved.toString(),
+                            textItemsJson,
+                            System.currentTimeMillis()
+                    );
+                    updated.id = editingMemeId;
+                    db.memeDao().update(updated);
+                } else {
+                    Meme meme = new Meme(
+                            projectNameToSave,
+                            originalSaved.toString(),
+                            previewSaved.toString(),
+                            textItemsJson,
+                            System.currentTimeMillis()
+                    );
+                    long newId = db.memeDao().insert(meme);
+                    editingMemeId = newId;
+                    isEditingExistingProject = true;
+                }
+
+                currentProjectName = projectNameToSave;
+
+                runOnUiThread(() ->
+                        Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show()
+                );
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() ->
+                        Toast.makeText(this, "Ошибка сохранения проекта", Toast.LENGTH_SHORT).show()
+                );
+            }
+        }).start();
+    }
+
+    private void showEditDialog(int index, @NonNull TextItem item) {
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        container.setPadding(pad, pad, pad, pad);
+
+        EditText textInput = new EditText(this);
+        textInput.setHint("Введите текст");
+        textInput.setText(item.text);
+        textInput.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        textInput.setHintTextColor(0x99FFFFFF);
+        textInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        container.addView(textInput);
+
+        EditText sizeInput = new EditText(this);
+        sizeInput.setHint("Размер текста");
+        sizeInput.setText(String.valueOf(item.textSizeSp));
+        sizeInput.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        sizeInput.setHintTextColor(0x99FFFFFF);
+        sizeInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        container.addView(sizeInput);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Редактировать текст")
+                .setView(container)
+                .setPositiveButton("Сохранить", (d, which) -> {
+                    String newText = textInput.getText().toString().trim();
+                    if (newText.isEmpty()) newText = "Текст";
+
+                    float newSize;
+                    try {
+                        newSize = Float.parseFloat(sizeInput.getText().toString().trim());
+                    } catch (Exception e) {
+                        newSize = item.textSizeSp;
+                    }
+
+                    TextItem updated = new TextItem(
+                            newText,
+                            newSize,
+                            item.x,
+                            item.y,
+                            item.typefaceStyle,
+                            item.color,
+                            item.align,
+                            item.boxWidth
+                    );
+
+                    viewModel.updateItem(index, updated);
+                })
+                .setNeutralButton("Удалить", (d, which) -> viewModel.removeItem(index))
+                .setNegativeButton("Отмена", null)
+                .create();
+
+        dialog.show();
+    }
+
+    @Override
+    public boolean onSupportNavigateUp() {
+        finish();
+        return true;
+    }
+
     @Override
     public boolean onCreateOptionsMenu(android.view.Menu menu) {
-        getMenuInflater().inflate(R.menu.editor_menu, menu);
+        menu.clear();
 
-        android.view.MenuItem saveItem = menu.findItem(R.id.action_save);
-        if (saveItem != null && saveItem.getIcon() != null) {
+        android.view.MenuItem saveItem = menu.add(
+                android.view.Menu.NONE,
+                R.id.action_save,
+                android.view.Menu.NONE,
+                "Сохранить"
+        );
+
+        saveItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS);
+        saveItem.setIcon(android.R.drawable.ic_menu_save);
+
+        if (saveItem.getIcon() != null) {
             saveItem.getIcon().setTint(
                     ContextCompat.getColor(this, R.color.text_primary)
             );
@@ -72,368 +495,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    public boolean onOptionsItemSelected(@NonNull android.view.MenuItem item) {
-        if (item.getItemId() == R.id.action_save) {
-            saveCurrentImage();
+    public boolean onOptionsItemSelected(android.view.MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            finish();
             return true;
         }
+
+        if (item.getItemId() == R.id.action_save) {
+            saveImage();
+            return true;
+        }
+
         return super.onOptionsItemSelected(item);
-    }
-
-    private void setupToolbar() {
-        setSupportActionBar(binding.topBar);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setDisplayShowTitleEnabled(false);
-        }
-
-        binding.topBar.setNavigationOnClickListener(v ->
-                getOnBackPressedDispatcher().onBackPressed()
-        );
-
-        binding.topBar.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-        binding.topBar.setTitleTextColor(ContextCompat.getColor(this, R.color.text_primary));
-        binding.topBar.setNavigationIconTint(ContextCompat.getColor(this, R.color.text_primary));
-    }
-
-    private void setupWindow() {
-        new WindowInsetsControllerCompat(getWindow(), binding.getRoot())
-                .setAppearanceLightStatusBars(true);
-    }
-
-    private void setupViewModel() {
-        viewModel = new ViewModelProvider(this).get(MemeViewModel.class);
-        viewModel.getTextItems().observe(this, items -> binding.imageView.setTextItems(items));
-
-        binding.imageView.setOnTextEditRequestListener(this::showEditDialog);
-        binding.imageView.setOnTextMovedListener((index, item) -> viewModel.updateItem(index, item));
-    }
-
-    private void setupPickImage() {
-        pickImageLauncher = registerForActivityResult(
-                new ActivityResultContracts.GetContent(),
-                this::onImagePicked
-        );
-    }
-
-    private void setupButtons() {
-        binding.btnPick.setOnClickListener(v -> ensurePhotoPermissionThenPick());
-
-        binding.btnAddText.setOnClickListener(v -> {
-            float x = Math.max(40f, binding.imageView.getWidth() * 0.5f);
-            float y = Math.max(80f, binding.imageView.getHeight() * 0.35f);
-            viewModel.addTextCentered("Ваш текст", 32f, x, y);
-            Toast.makeText(this, "Двойной тап по тексту — редактировать", Toast.LENGTH_SHORT).show();
-        });
-
-        binding.bottomAppBar.post(() ->
-                binding.imageView.setContentBottomInsetPx(binding.bottomAppBar.getHeight())
-        );
-    }
-
-    private void setupInsets() {
-        ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (view, insets) -> {
-            int status = WindowInsetsCompat.Type.statusBars();
-            int nav = WindowInsetsCompat.Type.navigationBars();
-
-            androidx.core.graphics.Insets sb = insets.getInsets(status);
-            androidx.core.graphics.Insets nb = insets.getInsets(nav);
-
-            binding.appbar.setPadding(
-                    binding.appbar.getPaddingLeft(),
-                    sb.top,
-                    binding.appbar.getPaddingRight(),
-                    binding.appbar.getPaddingBottom()
-            );
-
-            binding.bottomAppBar.setPadding(
-                    binding.bottomAppBar.getPaddingLeft(),
-                    binding.bottomAppBar.getPaddingTop(),
-                    binding.bottomAppBar.getPaddingRight(),
-                    nb.bottom
-            );
-
-            binding.imageView.setPadding(
-                    binding.imageView.getPaddingLeft(),
-                    binding.imageView.getPaddingTop(),
-                    binding.imageView.getPaddingRight(),
-                    nb.bottom + binding.bottomAppBar.getHeight()
-            );
-
-            return insets;
-        });
-    }
-
-    private void handleEditIntent() {
-        String editImagePath = getIntent().getStringExtra("edit_image_path");
-        String editTopText = getIntent().getStringExtra("edit_top_text");
-        String editBottomText = getIntent().getStringExtra("edit_bottom_text");
-
-        if (editImagePath == null || editImagePath.trim().isEmpty()) {
-            return;
-        }
-
-        Uri uri = Uri.parse(editImagePath);
-        loadProjectFromHistory(uri, editTopText, editBottomText);
-    }
-
-    private void loadProjectFromHistory(@NonNull Uri uri, @Nullable String topText, @Nullable String bottomText) {
-        int tw = binding.imageView.getWidth();
-        int th = binding.imageView.getHeight();
-
-        if (tw <= 0 || th <= 0) {
-            var dm = getResources().getDisplayMetrics();
-            tw = dm.widthPixels;
-            th = dm.heightPixels;
-        }
-
-        Bitmap bmp = loadBitmapFromUri(this, uri, tw, th);
-        if (bmp == null) {
-            Toast.makeText(this, "Не удалось открыть проект", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        binding.imageView.addImageBitmap(bmp);
-
-        binding.imageView.post(() -> {
-            float centerX = Math.max(40f, binding.imageView.getWidth() * 0.5f);
-
-            if (topText != null && !topText.trim().isEmpty()) {
-                float topY = Math.max(80f, binding.imageView.getHeight() * 0.25f);
-                viewModel.addTextCentered(topText, 32f, centerX, topY);
-            }
-
-            if (bottomText != null && !bottomText.trim().isEmpty()) {
-                float bottomY = Math.max(80f, binding.imageView.getHeight() * 0.75f);
-                viewModel.addTextCentered(bottomText, 32f, centerX, bottomY);
-            }
-        });
-    }
-
-    private void onImagePicked(@Nullable Uri uri) {
-        if (uri == null) {
-            Toast.makeText(this, "Изображение не выбрано", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        int tw = binding.imageView.getWidth();
-        int th = binding.imageView.getHeight();
-        if (tw <= 0 || th <= 0) {
-            var dm = getResources().getDisplayMetrics();
-            tw = dm.widthPixels;
-            th = dm.heightPixels;
-        }
-
-        Bitmap bmp = loadBitmapFromUri(this, uri, tw, th);
-        if (bmp == null) {
-            Toast.makeText(this, "Не удалось загрузить изображение", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        binding.imageView.addImageBitmap(bmp);
-    }
-
-    private void saveCurrentImage() {
-        if (!binding.imageView.hasImage()) {
-            Toast.makeText(this, "Сначала выберите фото", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        Bitmap out = binding.imageView.exportToBitmapAtOriginal();
-        new Thread(() -> {
-            Uri saved = MemeRepository.saveBitmapToGallery(
-                    this, out, "snapforge_" + System.currentTimeMillis() + ".png"
-            );
-
-            runOnUiThread(() -> {
-                if (saved != null) {
-                    Toast.makeText(this, "Сохранено в Галерею", Toast.LENGTH_SHORT).show();
-                    String[] tb = pickTopBottomTexts();
-                    saveProjectToHistory(saved, tb[0], tb[1]);
-                } else {
-                    Toast.makeText(this, "Не удалось сохранить", Toast.LENGTH_SHORT).show();
-                }
-            });
-        }).start();
-    }
-
-    @NonNull
-    private String[] pickTopBottomTexts() {
-        var live = viewModel.getTextItems().getValue();
-        String top = "";
-        String bottom = "";
-
-        if (live != null && !live.isEmpty()) {
-            top = live.get(0).text != null ? live.get(0).text : "";
-            if (live.size() > 1) {
-                bottom = live.get(1).text != null ? live.get(1).text : "";
-            }
-        }
-
-        return new String[]{top, bottom};
-    }
-
-    private void showEditDialog(int index, @NonNull TextItem item) {
-        if (editDialog != null && editDialog.isShowing()) return;
-
-        LinearLayout container = new LinearLayout(this);
-        container.setOrientation(LinearLayout.VERTICAL);
-        int pad = (int) (16 * getResources().getDisplayMetrics().density);
-        container.setPadding(pad, pad, pad, pad);
-
-        EditText textEt = new EditText(this);
-        textEt.setHint("Текст");
-        textEt.setText(item.text);
-        textEt.setSingleLine(false);
-        textEt.setMinLines(2);
-        textEt.setInputType(
-                InputType.TYPE_CLASS_TEXT
-                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-                        | InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        );
-        container.addView(textEt);
-
-        EditText sizeEt = new EditText(this);
-        sizeEt.setHint("Размер, sp");
-        sizeEt.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        sizeEt.setText(String.valueOf(item.textSizeSp));
-        container.addView(sizeEt);
-
-        LinearLayout alignRow = new LinearLayout(this);
-        alignRow.setOrientation(LinearLayout.HORIZONTAL);
-        alignRow.setPadding(0, pad / 2, 0, 0);
-
-        android.widget.Button leftBtn = new android.widget.Button(this);
-        leftBtn.setText("←");
-        android.widget.Button centerBtn = new android.widget.Button(this);
-        centerBtn.setText("↔");
-        android.widget.Button rightBtn = new android.widget.Button(this);
-        rightBtn.setText("→");
-
-        int btnPad = (int) (8 * getResources().getDisplayMetrics().density);
-        leftBtn.setPadding(btnPad, btnPad, btnPad, btnPad);
-        centerBtn.setPadding(btnPad, btnPad, btnPad, btnPad);
-        rightBtn.setPadding(btnPad, btnPad, btnPad, btnPad);
-
-        alignRow.addView(leftBtn);
-        alignRow.addView(centerBtn);
-        alignRow.addView(rightBtn);
-        container.addView(alignRow);
-
-        final int[] selectedAlign = {item.align};
-        Runnable refreshAlignUI = () -> {
-            leftBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_LEFT);
-            centerBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_CENTER);
-            rightBtn.setEnabled(selectedAlign[0] != TextItem.ALIGN_RIGHT);
-        };
-
-        View.OnClickListener alignClick = v -> {
-            if (v == leftBtn) selectedAlign[0] = TextItem.ALIGN_LEFT;
-            else if (v == centerBtn) selectedAlign[0] = TextItem.ALIGN_CENTER;
-            else if (v == rightBtn) selectedAlign[0] = TextItem.ALIGN_RIGHT;
-            refreshAlignUI.run();
-        };
-
-        leftBtn.setOnClickListener(alignClick);
-        centerBtn.setOnClickListener(alignClick);
-        rightBtn.setOnClickListener(alignClick);
-        refreshAlignUI.run();
-
-        AlertDialog.Builder b = new AlertDialog.Builder(this)
-                .setTitle("Редактировать текст")
-                .setView(container)
-                .setPositiveButton("OK", (d, w) -> {
-                    String newText = textEt.getText().toString();
-                    float newSize;
-                    try {
-                        newSize = Float.parseFloat(sizeEt.getText().toString());
-                    } catch (Exception ex) {
-                        newSize = item.textSizeSp;
-                    }
-
-                    TextItem updated = new TextItem(
-                            newText,
-                            Math.max(8f, newSize),
-                            item.x,
-                            item.y,
-                            item.typefaceStyle,
-                            item.color,
-                            selectedAlign[0]
-                    );
-                    viewModel.updateItem(index, updated);
-                })
-                .setNeutralButton("Удалить", (d, w) -> viewModel.removeItem(index))
-                .setNegativeButton("Отмена", null);
-
-        editDialog = b.create();
-        editDialog.setOnDismissListener(d -> editDialog = null);
-        editDialog.show();
-    }
-
-    private final ActivityResultLauncher<String[]> permissionLauncher =
-            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                boolean granted;
-
-                if (android.os.Build.VERSION.SDK_INT >= 33) {
-                    Boolean ok = result.getOrDefault(android.Manifest.permission.READ_MEDIA_IMAGES, false);
-                    granted = ok != null && ok;
-                } else if (android.os.Build.VERSION.SDK_INT >= 23) {
-                    Boolean ok = result.getOrDefault(android.Manifest.permission.READ_EXTERNAL_STORAGE, false);
-                    granted = ok != null && ok;
-                } else {
-                    granted = true;
-                }
-
-                if (granted) {
-                    pickImageLauncher.launch("image/*");
-                } else {
-                    Toast.makeText(this, "Нет разрешения на чтение изображений", Toast.LENGTH_SHORT).show();
-                }
-            });
-
-    private void ensurePhotoPermissionThenPick() {
-        if (android.os.Build.VERSION.SDK_INT < 23) {
-            pickImageLauncher.launch("image/*");
-            return;
-        }
-
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            if (checkSelfPermission(android.Manifest.permission.READ_MEDIA_IMAGES)
-                    == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                pickImageLauncher.launch("image/*");
-            } else {
-                permissionLauncher.launch(new String[]{android.Manifest.permission.READ_MEDIA_IMAGES});
-            }
-        } else {
-            if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-                    == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                pickImageLauncher.launch("image/*");
-            } else {
-                permissionLauncher.launch(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE});
-            }
-        }
-    }
-
-    private void saveProjectToHistory(@NonNull Uri savedUri, @NonNull String topText, @NonNull String bottomText) {
-        new Thread(() -> {
-            com.example.memegenerator.data.Meme item =
-                    new com.example.memegenerator.data.Meme(
-                            savedUri.toString(),
-                            topText,
-                            bottomText,
-                            System.currentTimeMillis()
-                    );
-
-            com.example.memegenerator.data.MemeDatabase
-                    .getInstance(getApplicationContext())
-                    .memeDao()
-                    .insert(item);
-        }).start();
-    }
-
-    @Override
-    public boolean onSupportNavigateUp() {
-        getOnBackPressedDispatcher().onBackPressed();
-        return true;
     }
 }
