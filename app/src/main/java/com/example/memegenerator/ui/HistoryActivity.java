@@ -94,7 +94,6 @@ public class HistoryActivity extends AppCompatActivity {
     }
 
     private void setupToolbar() {
-        setSupportActionBar(binding.historyTopBar);
 
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
@@ -102,13 +101,6 @@ public class HistoryActivity extends AppCompatActivity {
             getSupportActionBar().setTitle(getString(R.string.projects_title));
         }
 
-        binding.historyTopBar.setNavigationOnClickListener(v -> finish());
-        binding.historyTopBar.setNavigationIconTint(
-                ContextCompat.getColor(this, R.color.on_surface)
-        );
-        binding.historyTopBar.setTitleTextColor(
-                ContextCompat.getColor(this, R.color.on_surface)
-        );
     }
 
     private void setupList() {
