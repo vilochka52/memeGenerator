@@ -25,12 +25,15 @@ public class TextItem implements Parcelable {
     public final int align;
     public final float boxWidth;
 
+    public final boolean visible;
+    public final float alpha;
+
     public TextItem(@NonNull String text,
                     float textSizeSp,
                     float x,
                     float y,
                     int typefaceStyle) {
-        this(text, textSizeSp, x, y, typefaceStyle, Color.WHITE, ALIGN_CENTER, 0f);
+        this(text, textSizeSp, x, y, typefaceStyle, Color.WHITE, ALIGN_CENTER, 0f, true, 1f);
     }
 
     public TextItem(@NonNull String text,
@@ -39,7 +42,7 @@ public class TextItem implements Parcelable {
                     float y,
                     int typefaceStyle,
                     int color) {
-        this(text, textSizeSp, x, y, typefaceStyle, color, ALIGN_CENTER, 0f);
+        this(text, textSizeSp, x, y, typefaceStyle, color, ALIGN_CENTER, 0f, true, 1f);
     }
 
     public TextItem(@NonNull String text,
@@ -49,7 +52,7 @@ public class TextItem implements Parcelable {
                     int typefaceStyle,
                     int color,
                     int align) {
-        this(text, textSizeSp, x, y, typefaceStyle, color, align, 0f);
+        this(text, textSizeSp, x, y, typefaceStyle, color, align, 0f, true, 1f);
     }
 
     public TextItem(@NonNull String text,
@@ -60,6 +63,19 @@ public class TextItem implements Parcelable {
                     int color,
                     int align,
                     float boxWidth) {
+        this(text, textSizeSp, x, y, typefaceStyle, color, align, boxWidth, true, 1f);
+    }
+
+    public TextItem(@NonNull String text,
+                    float textSizeSp,
+                    float x,
+                    float y,
+                    int typefaceStyle,
+                    int color,
+                    int align,
+                    float boxWidth,
+                    boolean visible,
+                    float alpha) {
         this.text = text;
         this.textSizeSp = textSizeSp;
         this.x = x;
@@ -67,7 +83,9 @@ public class TextItem implements Parcelable {
         this.typefaceStyle = typefaceStyle;
         this.color = color;
         this.align = align;
-        this.boxWidth = boxWidth;
+        this.boxWidth = Math.max(0f, boxWidth);
+        this.visible = visible;
+        this.alpha = Math.max(0f, Math.min(1f, alpha));
     }
 
     protected TextItem(Parcel in) {
@@ -79,6 +97,8 @@ public class TextItem implements Parcelable {
         color = in.readInt();
         align = in.readInt();
         boxWidth = in.readFloat();
+        visible = in.readByte() != 0;
+        alpha = in.readFloat();
     }
 
     public static final Creator<TextItem> CREATOR = new Creator<TextItem>() {
@@ -94,27 +114,35 @@ public class TextItem implements Parcelable {
     };
 
     public TextItem withPosition(float nx, float ny) {
-        return new TextItem(text, textSizeSp, nx, ny, typefaceStyle, color, align, boxWidth);
+        return new TextItem(text, textSizeSp, nx, ny, typefaceStyle, color, align, boxWidth, visible, alpha);
     }
 
     public TextItem withText(@NonNull String newText) {
-        return new TextItem(newText, textSizeSp, x, y, typefaceStyle, color, align, boxWidth);
+        return new TextItem(newText, textSizeSp, x, y, typefaceStyle, color, align, boxWidth, visible, alpha);
     }
 
     public TextItem withSize(float newSize) {
-        return new TextItem(text, newSize, x, y, typefaceStyle, color, align, boxWidth);
+        return new TextItem(text, newSize, x, y, typefaceStyle, color, align, boxWidth, visible, alpha);
     }
 
     public TextItem withColor(@ColorInt int newColor) {
-        return new TextItem(text, textSizeSp, x, y, typefaceStyle, newColor, align, boxWidth);
+        return new TextItem(text, textSizeSp, x, y, typefaceStyle, newColor, align, boxWidth, visible, alpha);
     }
 
     public TextItem withAlign(int newAlign) {
-        return new TextItem(text, textSizeSp, x, y, typefaceStyle, color, newAlign, boxWidth);
+        return new TextItem(text, textSizeSp, x, y, typefaceStyle, color, newAlign, boxWidth, visible, alpha);
     }
 
     public TextItem withBoxWidth(float newBoxWidth) {
-        return new TextItem(text, textSizeSp, x, y, typefaceStyle, color, align, Math.max(0f, newBoxWidth));
+        return new TextItem(text, textSizeSp, x, y, typefaceStyle, color, align, Math.max(0f, newBoxWidth), visible, alpha);
+    }
+
+    public TextItem withVisible(boolean newVisible) {
+        return new TextItem(text, textSizeSp, x, y, typefaceStyle, color, align, boxWidth, newVisible, alpha);
+    }
+
+    public TextItem withAlpha(float newAlpha) {
+        return new TextItem(text, textSizeSp, x, y, typefaceStyle, color, align, boxWidth, visible, Math.max(0f, Math.min(1f, newAlpha)));
     }
 
     @Override
@@ -132,5 +160,7 @@ public class TextItem implements Parcelable {
         dest.writeInt(color);
         dest.writeInt(align);
         dest.writeFloat(boxWidth);
+        dest.writeByte((byte) (visible ? 1 : 0));
+        dest.writeFloat(alpha);
     }
 }

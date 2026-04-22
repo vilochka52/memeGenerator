@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/exportSheetRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="20dp"
+    android:paddingTop="16dp"
+    android:paddingEnd="20dp"
+    android:paddingBottom="24dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@color/glass_stroke_soft" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/export_title"
+        android:textColor="@color/text_primary"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/export_subtitle"
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/actionGallery"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="18dp"
+        android:text="@string/export_gallery"
+        android:textAllCaps="false"
+        android:textColor="@color/text_primary"
+        app:backgroundTint="@color/surface_2"
+        app:cornerRadius="22dp"
+        app:strokeColor="@color/glass_stroke_soft"
+        app:strokeWidth="1dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/actionFiles"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="10dp"
+        android:text="@string/export_files"
+        android:textAllCaps="false"
+        android:textColor="@color/text_primary"
+        app:backgroundTint="@color/surface_2"
+        app:cornerRadius="22dp"
+        app:strokeColor="@color/glass_stroke_soft"
+        app:strokeWidth="1dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/actionShare"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="10dp"
+        android:text="@string/export_share"
+        android:textAllCaps="false"
+        android:textColor="@color/text_primary"
+        app:backgroundTint="@color/surface_2"
+        app:cornerRadius="22dp"
+        app:strokeColor="@color/glass_stroke_soft"
+        app:strokeWidth="1dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/actionCopy"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="10dp"
+        android:text="@string/export_copy"
+        android:textAllCaps="false"
+        android:textColor="@color/text_primary"
+        app:backgroundTint="@color/surface_2"
+        app:cornerRadius="22dp"
+        app:strokeColor="@color/glass_stroke_soft"
+        app:strokeWidth="1dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/actionDraft"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="10dp"
+        android:text="@string/export_draft"
+        android:textAllCaps="false"
+        android:textColor="@color/accent_text"
+        app:backgroundTint="@color/accent_glass"
+        app:cornerRadius="22dp"
+        app:strokeWidth="0dp" />
+
+</LinearLayout>

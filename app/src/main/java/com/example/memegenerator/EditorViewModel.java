@@ -101,4 +101,72 @@ public class EditorViewModel extends ViewModel {
         }
         return new com.google.gson.Gson().toJson(list);
     }
+
+    public void setItemVisible(int index, boolean visible) {
+        List<TextItem> current = copy(textItems.getValue());
+        if (index < 0 || index >= current.size()) return;
+
+        saveState();
+
+        TextItem old = current.get(index);
+        current.set(index, new TextItem(
+                old.text,
+                old.textSizeSp,
+                old.x,
+                old.y,
+                old.typefaceStyle,
+                old.color,
+                old.align,
+                old.boxWidth,
+                visible,
+                old.alpha
+        ));
+
+        textItems.setValue(current);
+    }
+
+    public void setItemAlpha(int index, float alpha) {
+        List<TextItem> current = copy(textItems.getValue());
+        if (index < 0 || index >= current.size()) return;
+
+        saveState();
+
+        TextItem old = current.get(index);
+        current.set(index, new TextItem(
+                old.text,
+                old.textSizeSp,
+                old.x,
+                old.y,
+                old.typefaceStyle,
+                old.color,
+                old.align,
+                old.boxWidth,
+                old.visible,
+                alpha
+        ));
+
+        textItems.setValue(current);
+    }
+
+    public void moveItemUp(int index) {
+        List<TextItem> current = copy(textItems.getValue());
+        if (index <= 0 || index >= current.size()) return;
+
+        saveState();
+
+        TextItem item = current.remove(index);
+        current.add(index - 1, item);
+        textItems.setValue(current);
+    }
+
+    public void moveItemDown(int index) {
+        List<TextItem> current = copy(textItems.getValue());
+        if (index < 0 || index >= current.size() - 1) return;
+
+        saveState();
+
+        TextItem item = current.remove(index);
+        current.add(index + 1, item);
+        textItems.setValue(current);
+    }
 }

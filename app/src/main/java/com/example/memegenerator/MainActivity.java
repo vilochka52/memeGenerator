@@ -4,8 +4,11 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
+import android.view.LayoutInflater;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -23,6 +26,7 @@ import androidx.lifecycle.ViewModelProvider;
 import com.example.memegenerator.data.Project;
 import com.example.memegenerator.data.ProjectDatabase;
 import com.example.memegenerator.databinding.ActivityMainBinding;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -53,12 +57,12 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        setupToolbar();
         setupInsets();
         setupViewModel();
         setupImagePicker();
         setupButtons();
         handleEditIntent();
+        updateEmptyState();
 
         String newProjectName = getIntent().getStringExtra("new_project_name");
         if (newProjectName != null && !newProjectName.trim().isEmpty()) {
@@ -66,23 +70,15 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setupToolbar() {
-        setSupportActionBar(binding.topBar);
+    private int dp(int value) {
+        return Math.round(getResources().getDisplayMetrics().density * value);
+    }
 
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setDisplayShowTitleEnabled(true);
-        }
+    private void updateEmptyState() {
+        if (binding == null) return;
 
-        binding.topBar.setNavigationOnClickListener(v -> finish());
-
-        binding.topBar.setNavigationIconTint(
-                ContextCompat.getColor(this, R.color.text_primary)
-        );
-
-        binding.topBar.setTitleTextColor(
-                ContextCompat.getColor(this, R.color.text_primary)
-        );
+        boolean hasImage = binding.imageView != null && binding.imageView.hasImage();
+        binding.emptyState.setVisibility(hasImage ? View.GONE : View.VISIBLE);
     }
 
     private void setupInsets() {
@@ -92,30 +88,32 @@ public class MainActivity extends AppCompatActivity {
             androidx.core.graphics.Insets navBars =
                     insets.getInsets(WindowInsetsCompat.Type.navigationBars());
 
-            binding.appbar.setPadding(
-                    binding.appbar.getPaddingLeft(),
-                    statusBars.top,
-                    binding.appbar.getPaddingRight(),
-                    binding.appbar.getPaddingBottom()
+            binding.topBar.setPadding(
+                    binding.topBar.getPaddingLeft(),
+                    statusBars.top + dp(12),
+                    binding.topBar.getPaddingRight(),
+                    binding.topBar.getPaddingBottom()
             );
 
-            binding.bottomBar.setPadding(
-                    binding.bottomBar.getPaddingLeft(),
-                    binding.bottomBar.getPaddingTop(),
-                    binding.bottomBar.getPaddingRight(),
-                    navBars.bottom
-            );
+            binding.root.post(() -> {
+                android.view.ViewGroup.MarginLayoutParams topActionsLp =
+                        (android.view.ViewGroup.MarginLayoutParams) binding.topActionsRow.getLayoutParams();
 
-            int bottomInset = binding.bottomBar.getMeasuredHeight() + navBars.bottom;
+                topActionsLp.topMargin = binding.topBar.getHeight() + dp(12);
+                binding.topActionsRow.setLayoutParams(topActionsLp);
 
-            binding.imageView.setPadding(
-                    binding.imageView.getPaddingLeft(),
-                    binding.imageView.getPaddingTop(),
-                    binding.imageView.getPaddingRight(),
-                    bottomInset
-            );
+                binding.root.post(() -> {
+                    android.view.ViewGroup.MarginLayoutParams canvasLp =
+                            (android.view.ViewGroup.MarginLayoutParams) binding.canvasCard.getLayoutParams();
 
-            binding.imageView.setContentBottomInsetPx(bottomInset);
+                    canvasLp.topMargin = binding.topBar.getHeight()
+                            + binding.topActionsRow.getHeight()
+                            + dp(24);
+
+                    canvasLp.bottomMargin = binding.toolsScroll.getHeight() + dp(32) + navBars.bottom;
+                    binding.canvasCard.setLayoutParams(canvasLp);
+                });
+            });
 
             return insets;
         });
@@ -156,6 +154,7 @@ public class MainActivity extends AppCompatActivity {
 
                     currentOriginalImagePath = localUri.toString();
                     binding.imageView.addImageBitmap(bmp);
+                    updateEmptyState();
                 }
         );
     }
@@ -196,16 +195,176 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupButtons() {
-        binding.btnPick.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
-
-        binding.btnAddText.setOnClickListener(v -> {
-            float centerX = binding.imageView.getWidth() / 2f;
-            float centerY = binding.imageView.getHeight() / 2f;
-            viewModel.addTextCentered(getString(R.string.placeholder_text), 28f, centerX, centerY);
-        });
+        binding.btnBack.setOnClickListener(v -> finish());
+        binding.btnExportTop.setOnClickListener(v -> saveImage());
 
         binding.btnUndo.setOnClickListener(v -> viewModel.undo());
         binding.btnRedo.setOnClickListener(v -> viewModel.redo());
+        binding.btnLayersTop.setOnClickListener(v -> showLayersSheet());
+
+        binding.toolPickCard.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
+        binding.btnPick.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
+
+        binding.toolCropCard.setOnClickListener(v ->
+                Toast.makeText(this, "Обрезка будет подключена следующим шагом", Toast.LENGTH_SHORT).show()
+        );
+        binding.btnCrop.setOnClickListener(v ->
+                Toast.makeText(this, "Обрезка будет подключена следующим шагом", Toast.LENGTH_SHORT).show()
+        );
+
+        binding.toolTextCard.setOnClickListener(v -> addTextLayer());
+        binding.btnAddText.setOnClickListener(v -> addTextLayer());
+
+        binding.toolDrawCard.setOnClickListener(v ->
+                Toast.makeText(this, "Рисование будет подключена следующим шагом", Toast.LENGTH_SHORT).show()
+        );
+        binding.btnDraw.setOnClickListener(v ->
+                Toast.makeText(this, "Рисование будет подключена следующим шагом", Toast.LENGTH_SHORT).show()
+        );
+
+        binding.toolFiltersCard.setOnClickListener(v ->
+                Toast.makeText(this, "Фильтры будут подключены следующим шагом", Toast.LENGTH_SHORT).show()
+        );
+        binding.btnFilters.setOnClickListener(v ->
+                Toast.makeText(this, "Фильтры будут подключены следующим шагом", Toast.LENGTH_SHORT).show()
+        );
+    }
+
+    private void addTextLayer() {
+        if (!binding.imageView.hasImage()) {
+            Toast.makeText(this, R.string.pick_first, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        float centerX = binding.imageView.getWidth() / 2f;
+        float centerY = binding.imageView.getHeight() / 2f;
+        viewModel.addTextCentered(getString(R.string.placeholder_text), 28f, centerX, centerY);
+    }
+
+    private void showLayersSheet() {
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
+        View sheet = LayoutInflater.from(this).inflate(R.layout.sheet_layers, null, false);
+        dialog.setContentView(sheet);
+
+        TextView summary = sheet.findViewById(R.id.layersSummary);
+        LinearLayout container = sheet.findViewById(R.id.layersContainer);
+
+        List<TextItem> items = viewModel.getTextItems().getValue();
+        final List<TextItem> textItems = items != null ? items : new ArrayList<>();
+
+        boolean hasImage = binding.imageView.hasImage();
+        String summaryText = "Фон: " + (hasImage ? "есть" : "нет") + " • Текстов: " + textItems.size();
+        summary.setText(summaryText);
+
+        container.removeAllViews();
+
+        if (hasImage) {
+            View row = LayoutInflater.from(this).inflate(R.layout.item_layer_row, container, false);
+
+            TextView layerName = row.findViewById(R.id.layerName);
+            TextView layerMeta = row.findViewById(R.id.layerMeta);
+            android.widget.ImageButton btnVisible = row.findViewById(R.id.btnLayerVisible);
+            android.widget.ImageButton btnUp = row.findViewById(R.id.btnMoveUp);
+            android.widget.ImageButton btnDown = row.findViewById(R.id.btnMoveDown);
+            android.widget.SeekBar opacity = row.findViewById(R.id.layerOpacity);
+
+            layerName.setText("Фон");
+            layerMeta.setText("Прозрачность: " + Math.round(binding.imageView.getBaseImageAlpha() * 100) + "%");
+
+            boolean visible = binding.imageView.isBaseImageVisible();
+            btnVisible.setImageResource(visible ? R.drawable.ic_visibility : R.drawable.ic_visibility_off);
+
+            btnVisible.setOnClickListener(v -> {
+                binding.imageView.setBaseImageVisible(!binding.imageView.isBaseImageVisible());
+                dialog.dismiss();
+                showLayersSheet();
+            });
+
+            btnUp.setVisibility(View.INVISIBLE);
+            btnDown.setVisibility(View.INVISIBLE);
+
+            opacity.setProgress(Math.round(binding.imageView.getBaseImageAlpha() * 100));
+            opacity.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+                    float alpha = progress / 100f;
+                    binding.imageView.setBaseImageAlpha(alpha);
+                    layerMeta.setText("Прозрачность: " + progress + "%");
+                }
+
+                @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) {}
+                @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) {}
+            });
+
+            container.addView(row);
+        }
+
+        for (int i = textItems.size() - 1; i >= 0; i--) {
+            final int index = i;
+            final TextItem item = textItems.get(i);
+
+            View row = LayoutInflater.from(this).inflate(R.layout.item_layer_row, container, false);
+
+            TextView layerName = row.findViewById(R.id.layerName);
+            TextView layerMeta = row.findViewById(R.id.layerMeta);
+            android.widget.ImageButton btnVisible = row.findViewById(R.id.btnLayerVisible);
+            android.widget.ImageButton btnUp = row.findViewById(R.id.btnMoveUp);
+            android.widget.ImageButton btnDown = row.findViewById(R.id.btnMoveDown);
+            android.widget.SeekBar opacity = row.findViewById(R.id.layerOpacity);
+
+            String title = item.text != null && !item.text.trim().isEmpty() ? item.text : "Текст";
+            if (title.length() > 18) {
+                title = title.substring(0, 18) + "...";
+            }
+
+            layerName.setText("Текст: " + title);
+            layerMeta.setText("Прозрачность: " + Math.round(item.alpha * 100) + "%");
+
+            btnVisible.setImageResource(item.visible ? R.drawable.ic_visibility : R.drawable.ic_visibility_off);
+            btnVisible.setOnClickListener(v -> {
+                viewModel.setItemVisible(index, !item.visible);
+                dialog.dismiss();
+                showLayersSheet();
+            });
+
+            btnUp.setOnClickListener(v -> {
+                viewModel.moveItemUp(index);
+                dialog.dismiss();
+                showLayersSheet();
+            });
+
+            btnDown.setOnClickListener(v -> {
+                viewModel.moveItemDown(index);
+                dialog.dismiss();
+                showLayersSheet();
+            });
+
+            opacity.setProgress(Math.round(item.alpha * 100));
+            opacity.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+                    float alpha = progress / 100f;
+                    viewModel.setItemAlpha(index, alpha);
+                    layerMeta.setText("Прозрачность: " + progress + "%");
+                }
+
+                @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) {}
+                @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) {}
+            });
+
+            container.addView(row);
+        }
+
+        if (!hasImage && textItems.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("Слоёв пока нет");
+            empty.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
+            empty.setTextSize(14f);
+            empty.setPadding(0, dp(8), 0, dp(8));
+            container.addView(empty);
+        }
+
+        dialog.show();
     }
 
     private void handleEditIntent() {
@@ -261,6 +420,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             binding.imageView.addImageBitmap(bmp);
+            updateEmptyState();
 
             List<TextItem> restored = parseTextItemsJson(textItemsJson);
             viewModel.setItems(restored);
@@ -290,6 +450,9 @@ public class MainActivity extends AppCompatActivity {
                 int align = o.optInt("align", TextItem.ALIGN_CENTER);
                 float boxWidth = (float) o.optDouble("boxWidth", 0f);
 
+                boolean visible = o.optBoolean("visible", true);
+                float alpha = (float) o.optDouble("alpha", 1f);
+
                 result.add(new TextItem(
                         text,
                         textSizeSp,
@@ -298,39 +461,15 @@ public class MainActivity extends AppCompatActivity {
                         typefaceStyle,
                         color,
                         align,
-                        boxWidth
+                        boxWidth,
+                        visible,
+                        alpha
                 ));
             }
         } catch (Exception ignored) {
         }
 
         return result;
-    }
-
-    @NonNull
-    private String buildTextItemsJson() {
-        JSONArray array = new JSONArray();
-
-        List<TextItem> items = viewModel.getTextItems().getValue();
-        if (items == null) return array.toString();
-
-        try {
-            for (TextItem item : items) {
-                JSONObject o = new JSONObject();
-                o.put("text", item.text);
-                o.put("textSizeSp", item.textSizeSp);
-                o.put("x", item.x);
-                o.put("y", item.y);
-                o.put("typefaceStyle", item.typefaceStyle);
-                o.put("color", item.color);
-                o.put("align", item.align);
-                o.put("boxWidth", item.boxWidth);
-                array.put(o);
-            }
-        } catch (Exception ignored) {
-        }
-
-        return array.toString();
     }
 
     private void saveImage() {
@@ -419,7 +558,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
 
-        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        int pad = dp(16);
         container.setPadding(pad, pad, pad, pad);
 
         EditText textInput = new EditText(this);
@@ -470,49 +609,5 @@ public class MainActivity extends AppCompatActivity {
                 .create();
 
         dialog.show();
-    }
-
-    @Override
-    public boolean onSupportNavigateUp() {
-        finish();
-        return true;
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(android.view.Menu menu) {
-        menu.clear();
-
-        android.view.MenuItem saveItem = menu.add(
-                android.view.Menu.NONE,
-                R.id.action_save,
-                android.view.Menu.NONE,
-                getString(R.string.save_action)
-        );
-
-        saveItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS);
-        saveItem.setIcon(android.R.drawable.ic_menu_save);
-
-        if (saveItem.getIcon() != null) {
-            saveItem.getIcon().setTint(
-                    ContextCompat.getColor(this, R.color.text_primary)
-            );
-        }
-
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(android.view.MenuItem item) {
-        if (item.getItemId() == android.R.id.home) {
-            finish();
-            return true;
-        }
-
-        if (item.getItemId() == R.id.action_save) {
-            saveImage();
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
     }
 }

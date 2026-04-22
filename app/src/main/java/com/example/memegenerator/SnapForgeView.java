@@ -7,9 +7,6 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
-import android.os.Build;
-import android.text.Layout;
-import android.text.StaticLayout;
 import android.text.TextPaint;
 import android.util.AttributeSet;
 import android.util.TypedValue;
@@ -43,6 +40,9 @@ public class SnapForgeView extends View {
     private int draggingIndex = -1;
     private float dragDx = 0f;
     private float dragDy = 0f;
+
+    private boolean baseImageVisible = true;
+    private float baseImageAlpha = 1f;
 
     @Nullable
     private TextItem dragStartItem = null;
@@ -112,6 +112,14 @@ public class SnapForgeView extends View {
 
     public void setTextItems(@Nullable List<TextItem> list) {
         items = (list == null) ? Collections.emptyList() : new ArrayList<>(list);
+
+        if (selectedTextIndex >= items.size()) {
+            selectedTextIndex = -1;
+        }
+        if (draggingIndex >= items.size()) {
+            draggingIndex = -1;
+        }
+
         invalidate();
     }
 
@@ -130,6 +138,42 @@ public class SnapForgeView extends View {
         contentBottomInsetPx = Math.max(0, px);
         recomputeImageMatrix();
         invalidate();
+    }
+
+    public boolean isBaseImageVisible() {
+        return baseImageVisible;
+    }
+
+    public void setBaseImageVisible(boolean visible) {
+        this.baseImageVisible = visible;
+        invalidate();
+    }
+
+    public float getBaseImageAlpha() {
+        return baseImageAlpha;
+    }
+
+    public void setBaseImageAlpha(float alpha) {
+        this.baseImageAlpha = clamp01(alpha);
+        invalidate();
+    }
+
+    public Bitmap exportBaseImageAtOriginal() {
+        if (baseOriginal == null || baseOriginal.isRecycled() || !baseImageVisible) {
+            return null;
+        }
+
+        Bitmap out = Bitmap.createBitmap(
+                baseOriginal.getWidth(),
+                baseOriginal.getHeight(),
+                Bitmap.Config.ARGB_8888
+        );
+
+        Canvas canvas = new Canvas(out);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        p.setAlpha(Math.round(255f * baseImageAlpha));
+        canvas.drawBitmap(baseOriginal, 0f, 0f, p);
+        return out;
     }
 
     public Bitmap exportToBitmapAtOriginal() {
@@ -151,7 +195,12 @@ public class SnapForgeView extends View {
         );
 
         Canvas canvas = new Canvas(out);
-        canvas.drawBitmap(baseOriginal, 0f, 0f, null);
+
+        if (baseImageVisible) {
+            Paint basePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+            basePaint.setAlpha(Math.round(255f * baseImageAlpha));
+            canvas.drawBitmap(baseOriginal, 0f, 0f, basePaint);
+        }
 
         float scaleX = dstRect.width() / srcRect.width();
         float scaleY = dstRect.height() / srcRect.height();
@@ -164,6 +213,10 @@ public class SnapForgeView extends View {
         float offsetY = dstRect.top + (dstRect.height() - drawnHeight) / 2f;
 
         for (TextItem item : items) {
+            if (!item.visible) {
+                continue;
+            }
+
             TextPaint tp = buildTextPaint(item);
             float exportSize = item.textSizeSp / drawScale;
             tp.setTextSize(sp(exportSize));
@@ -200,12 +253,16 @@ public class SnapForgeView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        if (hasImage()) {
+        if (hasImage() && baseImageVisible) {
+            imgPaint.setAlpha(Math.round(255f * baseImageAlpha));
             canvas.drawBitmap(baseOriginal, imageMatrix, imgPaint);
         }
 
         for (int i = 0; i < items.size(); i++) {
             TextItem item = items.get(i);
+            if (!item.visible) {
+                continue;
+            }
             drawTextItem(canvas, item, i == selectedTextIndex);
         }
     }
@@ -239,6 +296,14 @@ public class SnapForgeView extends View {
             case MotionEvent.ACTION_MOVE: {
                 if (draggingIndex >= 0 && draggingIndex < items.size()) {
                     TextItem item = items.get(draggingIndex);
+
+                    if (!item.visible) {
+                        draggingIndex = -1;
+                        dragStartItem = null;
+                        invalidate();
+                        return true;
+                    }
+
                     TextItem moved = item.withPosition(x - dragDx, y - dragDy);
 
                     List<TextItem> list = new ArrayList<>(items);
@@ -275,7 +340,6 @@ public class SnapForgeView extends View {
 
         float textWidth = tp.measureText(text);
         Paint.FontMetrics fm = tp.getFontMetrics();
-        float textHeight = fm.bottom - fm.top;
 
         float drawX;
         if (item.align == TextItem.ALIGN_CENTER) {
@@ -305,15 +369,26 @@ public class SnapForgeView extends View {
 
     private TextPaint buildTextPaint(TextItem item) {
         TextPaint tp = new TextPaint(textPaint);
-        tp.setColor(item.color);
         tp.setTextSize(sp(item.textSizeSp));
         tp.setTypeface(Typeface.create(Typeface.DEFAULT, item.typefaceStyle));
+
+        tp.setColor(item.color);
+
+        int originalAlpha = android.graphics.Color.alpha(item.color);
+        int finalAlpha = Math.round(originalAlpha * clamp01(item.alpha));
+        tp.setAlpha(finalAlpha);
+
         return tp;
     }
 
     private int hitTestTextIndex(float touchX, float touchY) {
         for (int i = items.size() - 1; i >= 0; i--) {
             TextItem item = items.get(i);
+
+            if (!item.visible) {
+                continue;
+            }
+
             TextPaint tp = buildTextPaint(item);
             String text = item.text == null ? "" : item.text;
 
@@ -357,6 +432,10 @@ public class SnapForgeView extends View {
         imageMatrix.setRectToRect(srcRect, dstRect, Matrix.ScaleToFit.CENTER);
     }
 
+    private float clamp01(float value) {
+        return Math.max(0f, Math.min(1f, value));
+    }
+
     private float dp(float value) {
         return TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP,
@@ -371,12 +450,5 @@ public class SnapForgeView extends View {
                 value,
                 getResources().getDisplayMetrics()
         );
-    }
-
-    public Bitmap exportBaseImageAtOriginal() {
-        if (baseOriginal == null || baseOriginal.isRecycled()) {
-            return null;
-        }
-        return baseOriginal.copy(Bitmap.Config.ARGB_8888, false);
     }
 }

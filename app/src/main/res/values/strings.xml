@@ -67,4 +67,27 @@
     <string name="section_today">Сегодня</string>
     <string name="section_recent">Недавно</string>
     <string name="section_older">Ранее</string>
+
+    <string name="editor_back">Назад</string>
+    <string name="editor_export">Экспорт</string>
+    <string name="editor_tools">Инструменты</string>
+
+    <string name="tool_text">Текст</string>
+    <string name="tool_draw">Кисть</string>
+    <string name="tool_crop">Обрезка</string>
+    <string name="tool_filters">Фильтры</string>
+    <string name="tool_layers">Слои</string>
+    <string name="tool_adjust">Коррекция</string>
+
+    <string name="editor_empty_title">Начни редактирование</string>
+    <string name="editor_empty_subtitle">Выбери фото, добавь текст, рисунок, фильтры и сохрани результат</string>
+
+    <string name="export_title">Экспорт</string>
+    <string name="export_gallery">В галерею</string>
+    <string name="export_files">В файлы</string>
+    <string name="export_share">Поделиться</string>
+    <string name="export_copy">Скопировать</string>
+    <string name="export_draft">Сохранить как черновик</string>
+    <string name="export_subtitle">Выбери, что сделать с проектом</string>
+
 </resources>
