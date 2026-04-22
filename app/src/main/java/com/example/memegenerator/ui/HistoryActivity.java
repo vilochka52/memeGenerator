@@ -6,6 +6,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -20,19 +21,18 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.example.memegenerator.MainActivity;
 import com.example.memegenerator.R;
-import com.example.memegenerator.data.Meme;
-import com.example.memegenerator.data.MemeDatabase;
+import com.example.memegenerator.data.Project;
+import com.example.memegenerator.data.ProjectDatabase;
 import com.example.memegenerator.databinding.ActivityHistoryBinding;
 
 import java.util.ArrayList;
 import java.util.List;
-import android.view.ViewGroup;
 
 public class HistoryActivity extends AppCompatActivity {
 
     private ActivityHistoryBinding binding;
-    private MemeAdapter adapter;
-    private final List<Meme> memes = new ArrayList<>();
+    private ProjectAdapter adapter;
+    private final List<Project> projects = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,7 +84,9 @@ public class HistoryActivity extends AppCompatActivity {
                     fab.getPaddingRight(),
                     fab.getPaddingBottom()
             );
-            ((ViewGroup.MarginLayoutParams) fab.getLayoutParams()).bottomMargin = dp(24) + navBars.bottom;
+
+            ((ViewGroup.MarginLayoutParams) fab.getLayoutParams()).bottomMargin =
+                    dp(24) + navBars.bottom;
             fab.requestLayout();
 
             return insets;
@@ -97,7 +99,7 @@ public class HistoryActivity extends AppCompatActivity {
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             getSupportActionBar().setDisplayShowTitleEnabled(true);
-            getSupportActionBar().setTitle("Мои проекты");
+            getSupportActionBar().setTitle(getString(R.string.projects_title));
         }
 
         binding.historyTopBar.setNavigationOnClickListener(v -> finish());
@@ -110,24 +112,24 @@ public class HistoryActivity extends AppCompatActivity {
     }
 
     private void setupList() {
-        adapter = new MemeAdapter(memes, new MemeAdapter.Listener() {
+        adapter = new ProjectAdapter(projects, new ProjectAdapter.Listener() {
             @Override
-            public void onOpen(Meme item) {
+            public void onOpen(Project item) {
                 openPreview(item);
             }
 
             @Override
-            public void onEdit(Meme item) {
+            public void onEdit(Project item) {
                 editProject(item);
             }
 
             @Override
-            public void onDelete(Meme item) {
+            public void onDelete(Project item) {
                 deleteProject(item);
             }
 
             @Override
-            public void onRename(Meme item) {
+            public void onRename(Project item) {
                 renameProject(item);
             }
         });
@@ -139,11 +141,11 @@ public class HistoryActivity extends AppCompatActivity {
     private void setupFab() {
         binding.fabCreate.setOnClickListener(v ->
                 AsyncTask.execute(() -> {
-                    int count = MemeDatabase.getInstance(getApplicationContext())
-                            .memeDao()
+                    int count = ProjectDatabase.getInstance(getApplicationContext())
+                            .projectDao()
                             .getCount();
 
-                    String nextName = "Новый проект " + (count + 1);
+                    String nextName = getString(R.string.new_project_numbered, count + 1);
 
                     runOnUiThread(() -> {
                         Intent intent = new Intent(this, MainActivity.class);
@@ -156,24 +158,24 @@ public class HistoryActivity extends AppCompatActivity {
 
     private void loadProjects() {
         AsyncTask.execute(() -> {
-            List<Meme> items = MemeDatabase.getInstance(getApplicationContext())
-                    .memeDao()
+            List<Project> items = ProjectDatabase.getInstance(getApplicationContext())
+                    .projectDao()
                     .getAllDesc();
 
             runOnUiThread(() -> {
-                memes.clear();
-                memes.addAll(items);
+                projects.clear();
+                projects.addAll(items);
                 adapter.notifyDataSetChanged();
 
-                binding.emptyView.setVisibility(memes.isEmpty() ? View.VISIBLE : View.GONE);
+                binding.emptyView.setVisibility(projects.isEmpty() ? View.VISIBLE : View.GONE);
             });
         });
     }
 
-    private void openPreview(@NonNull Meme item) {
+    private void openPreview(@NonNull Project item) {
         String path = item.previewImagePath;
         if (path == null || path.trim().isEmpty()) {
-            Toast.makeText(this, "Не удалось открыть превью", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.preview_open_error, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -184,37 +186,38 @@ public class HistoryActivity extends AppCompatActivity {
         try {
             startActivity(intent);
         } catch (Exception e) {
-            Toast.makeText(this, "Не удалось открыть изображение", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.image_open_error, Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void editProject(@NonNull Meme item) {
+    private void editProject(@NonNull Project item) {
         Intent intent = new Intent(this, MainActivity.class);
-        intent.putExtra("edit_meme_id", item.id);
+        intent.putExtra("edit_project_id", item.id);
         intent.putExtra("edit_original_image_path", item.originalImagePath);
         intent.putExtra("edit_overlay_image_path", item.previewImagePath);
         intent.putExtra("edit_text_items_json", item.textItemsJson);
+        intent.putExtra("edit_project_name", item.projectName);
         startActivity(intent);
     }
 
-    private void deleteProject(@NonNull Meme item) {
+    private void deleteProject(@NonNull Project item) {
         new AlertDialog.Builder(this)
-                .setTitle("Удалить проект?")
-                .setMessage("Это действие нельзя отменить.")
-                .setPositiveButton("Удалить", (d, w) ->
+                .setTitle(R.string.delete_project_title)
+                .setMessage(R.string.delete_project_message)
+                .setPositiveButton(R.string.action_delete, (d, w) ->
                         AsyncTask.execute(() -> {
-                            MemeDatabase.getInstance(getApplicationContext())
-                                    .memeDao()
+                            ProjectDatabase.getInstance(getApplicationContext())
+                                    .projectDao()
                                     .delete(item);
 
                             runOnUiThread(this::loadProjects);
                         })
                 )
-                .setNegativeButton("Отмена", null)
+                .setNegativeButton(R.string.action_cancel, null)
                 .show();
     }
 
-    private void renameProject(@NonNull Meme item) {
+    private void renameProject(@NonNull Project item) {
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT);
         input.setText(item.projectName != null ? item.projectName : "");
@@ -224,24 +227,24 @@ public class HistoryActivity extends AppCompatActivity {
         input.setPadding(pad, pad, pad, pad);
 
         new AlertDialog.Builder(this)
-                .setTitle("Название проекта")
+                .setTitle(R.string.rename_project)
                 .setView(input)
-                .setPositiveButton("Сохранить", (d, w) -> {
+                .setPositiveButton(R.string.save_action, (d, w) -> {
                     String newName = input.getText().toString().trim();
                     if (newName.isEmpty()) {
-                        Toast.makeText(this, "Название не может быть пустым", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, R.string.name_empty_error, Toast.LENGTH_SHORT).show();
                         return;
                     }
 
                     AsyncTask.execute(() -> {
-                        MemeDatabase.getInstance(getApplicationContext())
-                                .memeDao()
+                        ProjectDatabase.getInstance(getApplicationContext())
+                                .projectDao()
                                 .updateProjectName(item.id, newName);
 
                         runOnUiThread(this::loadProjects);
                     });
                 })
-                .setNegativeButton("Отмена", null)
+                .setNegativeButton(R.string.action_cancel, null)
                 .show();
     }
 
@@ -254,5 +257,4 @@ public class HistoryActivity extends AppCompatActivity {
         finish();
         return true;
     }
-
 }

@@ -43,4 +43,5 @@ dependencies {
     implementation "androidx.transition:transition:1.5.1"
     implementation 'com.burhanrashid52:photoeditor:1.5.1'
     implementation 'com.google.code.gson:gson:2.10.1'
+    implementation "androidx.core:core-splashscreen:1.0.1"
 }

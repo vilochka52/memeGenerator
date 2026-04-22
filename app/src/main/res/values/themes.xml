@@ -1,4 +1,5 @@
 <resources>
+
     <style name="Theme.SnapForge" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
@@ -11,6 +12,12 @@
         <item name="shapeAppearanceMediumComponent">@style/Shape.Medium</item>
         <item name="materialButtonStyle">@style/Widget.MG.Button</item>
         <item name="materialCardViewStyle">@style/Widget.MG.Card</item>
+    </style>
+
+    <style name="Theme.SnapForge.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.SnapForge</item>
     </style>
 
     <style name="Shape.Medium" parent="">
@@ -35,4 +42,5 @@
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">20dp</item>
     </style>
+
 </resources>

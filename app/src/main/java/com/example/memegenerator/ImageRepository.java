@@ -13,19 +13,20 @@ import androidx.annotation.Nullable;
 
 import java.io.OutputStream;
 
-public final class MemeRepository {
+public final class ImageRepository {
 
-    private MemeRepository() {}
+    private ImageRepository() {}
 
     @Nullable
     public static Uri saveBitmapToGallery(@NonNull Context ctx,
                                           @NonNull Bitmap bmp,
                                           @NonNull String fileName) {
         ContentResolver cr = ctx.getContentResolver();
+
         ContentValues values = new ContentValues();
         values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
         values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
-        values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MemeGenerator");
+        values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/SnapForge");
         values.put(MediaStore.Images.Media.IS_PENDING, 1);
 
         Uri uri = cr.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
@@ -42,6 +43,7 @@ public final class MemeRepository {
             fin.put(MediaStore.Images.Media.IS_PENDING, 0);
             cr.update(uri, fin, null, null);
         }
+
         return uri;
     }
 }

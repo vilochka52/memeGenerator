@@ -7,24 +7,24 @@ import androidx.room.Room;
 import androidx.room.RoomDatabase;
 
 @Database(
-        entities = {Meme.class},
-        version = 6,
+        entities = {Project.class},
+        version = 7,
         exportSchema = false
 )
-public abstract class MemeDatabase extends RoomDatabase {
+public abstract class ProjectDatabase extends RoomDatabase {
 
-    private static volatile MemeDatabase INSTANCE;
+    private static volatile ProjectDatabase INSTANCE;
 
-    public abstract MemeDao memeDao();
+    public abstract ProjectDao projectDao();
 
-    public static MemeDatabase getInstance(Context context) {
+    public static ProjectDatabase getInstance(Context context) {
         if (INSTANCE == null) {
-            synchronized (MemeDatabase.class) {
+            synchronized (ProjectDatabase.class) {
                 if (INSTANCE == null) {
                     INSTANCE = Room.databaseBuilder(
                                     context.getApplicationContext(),
-                                    MemeDatabase.class,
-                                    "meme_db"
+                                    ProjectDatabase.class,
+                                    "project_db"
                             )
                             .fallbackToDestructiveMigration()
                             .build();

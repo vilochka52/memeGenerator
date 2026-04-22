@@ -24,7 +24,7 @@
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
             app:navigationIconTint="@color/on_surface"
-            app:title="Мои проекты"
+            app:title="@string/projects_title"
             app:titleCentered="true"
             app:titleTextColor="@color/on_surface" />
 
@@ -52,7 +52,7 @@
             android:id="@+id/emptyTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Пока пусто"
+            android:text="@string/empty_projects_title"
             android:textColor="@color/on_surface"
             android:textSize="22sp"
             android:textStyle="bold" />
@@ -63,7 +63,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="Здесь будут сохранённые проекты SnapForge"
+            android:text="@string/empty_projects_subtitle"
             android:textColor="@color/on_surface_secondary"
             android:textSize="14sp" />
     </LinearLayout>
@@ -79,7 +79,7 @@
         android:elevation="0dp"
         android:paddingStart="20dp"
         android:paddingEnd="20dp"
-        android:text="Создать проект"
+        android:text="@string/create_project"
         android:textAllCaps="false"
         android:textColor="@color/accent_text"
         android:textSize="15sp"

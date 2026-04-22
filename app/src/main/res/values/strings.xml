@@ -1,9 +1,57 @@
 <resources>
     <string name="app_name">SnapForge</string>
-    <string name="pick">Выбрать фото</string>
-    <string name="add_text">Добавить текст</string>
+
+    <string name="pick">Фото</string>
+    <string name="add_text">Текст</string>
     <string name="save">Сохранить</string>
+    <string name="undo">Отмена</string>
+    <string name="redo">Повтор</string>
+
     <string name="editor_title">Редактор</string>
+    <string name="projects_title">Мои проекты</string>
+
+    <string name="create_project">Создать проект</string>
+    <string name="new_project">Новый проект</string>
+    <string name="new_project_numbered">Новый проект %1$d</string>
+
     <string name="edit_project">Редактировать проект</string>
     <string name="delete_project">Удалить проект</string>
+    <string name="rename_project">Название проекта</string>
+
+    <string name="empty_projects_title">Пока нет проектов</string>
+    <string name="empty_projects_subtitle">Создай свой первый проект в SnapForge</string>
+
+    <string name="rename_hint">Нажми, чтобы переименовать</string>
+
+    <string name="preview_open_error">Не удалось открыть превью</string>
+    <string name="image_open_error">Не удалось открыть изображение</string>
+    <string name="project_open_error">Не удалось открыть проект</string>
+
+    <string name="delete_project_title">Удалить проект?</string>
+    <string name="delete_project_message">Это действие нельзя отменить.</string>
+
+    <string name="save_action">Сохранить</string>
+    <string name="save_success">Проект сохранён</string>
+    <string name="save_error">Ошибка сохранения</string>
+    <string name="save_project_error">Ошибка сохранения проекта</string>
+
+    <string name="pick_first">Сначала выберите фото</string>
+    <string name="image_prepare_error">Ошибка подготовки изображения</string>
+    <string name="image_load_error">Не удалось загрузить фото</string>
+    <string name="image_store_error">Не удалось сохранить фото в память приложения</string>
+
+    <string name="edit_text_title">Редактировать текст</string>
+    <string name="enter_text_hint">Введите текст</string>
+    <string name="text_size_hint">Размер текста</string>
+    <string name="default_text">Текст</string>
+    <string name="placeholder_text">Ваш текст</string>
+
+    <string name="name_empty_error">Название не может быть пустым</string>
+
+    <string name="action_delete">Удалить</string>
+    <string name="action_cancel">Отмена</string>
+
+    <string name="welcome_title">Создавай. Редактируй. Преображай.</string>
+    <string name="welcome_subtitle">SnapForge — современный редактор для работы с изображениями и проектами.</string>
+    <string name="welcome_start">Начать</string>
 </resources>

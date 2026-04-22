@@ -20,8 +20,8 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.ViewModelProvider;
 
-import com.example.memegenerator.data.Meme;
-import com.example.memegenerator.data.MemeDatabase;
+import com.example.memegenerator.data.Project;
+import com.example.memegenerator.data.ProjectDatabase;
 import com.example.memegenerator.databinding.ActivityMainBinding;
 
 import org.json.JSONArray;
@@ -33,13 +33,15 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
-    private MemeViewModel viewModel;
+    private EditorViewModel viewModel;
     private ActivityResultLauncher<String> pickImageLauncher;
 
-    private long editingMemeId = -1L;
+    private long editingProjectId = -1L;
     private boolean isEditingExistingProject = false;
+
     @Nullable
     private String currentOriginalImagePath = null;
+
     private String currentProjectName = "";
 
     @Override
@@ -120,7 +122,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupViewModel() {
-        viewModel = new ViewModelProvider(this).get(MemeViewModel.class);
+        viewModel = new ViewModelProvider(this).get(EditorViewModel.class);
 
         viewModel.getTextItems().observe(this, items -> binding.imageView.setTextItems(items));
 
@@ -139,7 +141,7 @@ public class MainActivity extends AppCompatActivity {
 
                     Uri localUri = copyPickedImageToAppStorage(uri);
                     if (localUri == null) {
-                        Toast.makeText(this, "Не удалось сохранить фото в память приложения", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, R.string.image_store_error, Toast.LENGTH_SHORT).show();
                         return;
                     }
 
@@ -148,7 +150,7 @@ public class MainActivity extends AppCompatActivity {
 
                     Bitmap bmp = ImageLoader.loadBitmapFromUri(this, localUri, targetW, targetH);
                     if (bmp == null) {
-                        Toast.makeText(this, "Не удалось загрузить фото", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, R.string.image_load_error, Toast.LENGTH_SHORT).show();
                         return;
                     }
 
@@ -199,7 +201,7 @@ public class MainActivity extends AppCompatActivity {
         binding.btnAddText.setOnClickListener(v -> {
             float centerX = binding.imageView.getWidth() / 2f;
             float centerY = binding.imageView.getHeight() / 2f;
-            viewModel.addTextCentered("Ваш текст", 28f, centerX, centerY);
+            viewModel.addTextCentered(getString(R.string.placeholder_text), 28f, centerX, centerY);
         });
 
         binding.btnUndo.setOnClickListener(v -> viewModel.undo());
@@ -211,15 +213,15 @@ public class MainActivity extends AppCompatActivity {
         String editPreviewImagePath = getIntent().getStringExtra("edit_preview_image_path");
         String editTextItemsJson = getIntent().getStringExtra("edit_text_items_json");
         String editProjectName = getIntent().getStringExtra("edit_project_name");
-        long memeId = getIntent().getLongExtra("edit_meme_id", -1L);
+        long projectId = getIntent().getLongExtra("edit_project_id", -1L);
 
         if ((editOriginalImagePath == null || editOriginalImagePath.trim().isEmpty())
                 && (editPreviewImagePath == null || editPreviewImagePath.trim().isEmpty())) {
             return;
         }
 
-        editingMemeId = memeId;
-        isEditingExistingProject = memeId != -1L;
+        editingProjectId = projectId;
+        isEditingExistingProject = projectId != -1L;
         currentProjectName = editProjectName != null ? editProjectName : "";
 
         String pathToOpen = editOriginalImagePath;
@@ -253,7 +255,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             if (bmp == null) {
-                Toast.makeText(this, "Не удалось открыть проект", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.project_open_error, Toast.LENGTH_SHORT).show();
                 finish();
                 return;
             }
@@ -279,7 +281,7 @@ public class MainActivity extends AppCompatActivity {
             for (int i = 0; i < array.length(); i++) {
                 JSONObject o = array.getJSONObject(i);
 
-                String text = o.optString("text", "Текст");
+                String text = o.optString("text", getString(R.string.default_text));
                 float textSizeSp = (float) o.optDouble("textSizeSp", 28f);
                 float x = (float) o.optDouble("x", 0f);
                 float y = (float) o.optDouble("y", 0f);
@@ -333,7 +335,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void saveImage() {
         if (!binding.imageView.hasImage()) {
-            Toast.makeText(this, "Сначала выберите фото", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.pick_first, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -341,7 +343,7 @@ public class MainActivity extends AppCompatActivity {
         Bitmap originalOnlyBitmap = binding.imageView.exportBaseImageAtOriginal();
 
         if (previewBitmap == null || originalOnlyBitmap == null) {
-            Toast.makeText(this, "Ошибка подготовки изображения", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.image_prepare_error, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -349,16 +351,16 @@ public class MainActivity extends AppCompatActivity {
             try {
                 String projectNameToSave = currentProjectName;
                 if (projectNameToSave == null || projectNameToSave.trim().isEmpty()) {
-                    projectNameToSave = "Новый проект";
+                    projectNameToSave = getString(R.string.new_project);
                 }
 
-                Uri originalSaved = MemeRepository.saveBitmapToGallery(
+                Uri originalSaved = ImageRepository.saveBitmapToGallery(
                         this,
                         originalOnlyBitmap,
                         "original_" + System.currentTimeMillis() + ".png"
                 );
 
-                Uri previewSaved = MemeRepository.saveBitmapToGallery(
+                Uri previewSaved = ImageRepository.saveBitmapToGallery(
                         this,
                         previewBitmap,
                         "project_" + System.currentTimeMillis() + ".png"
@@ -366,48 +368,48 @@ public class MainActivity extends AppCompatActivity {
 
                 if (originalSaved == null || previewSaved == null) {
                     runOnUiThread(() ->
-                            Toast.makeText(this, "Ошибка сохранения", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, R.string.save_error, Toast.LENGTH_SHORT).show()
                     );
                     return;
                 }
 
                 String textItemsJson = viewModel.exportToJson();
 
-                MemeDatabase db = MemeDatabase.getInstance(getApplicationContext());
+                ProjectDatabase db = ProjectDatabase.getInstance(getApplicationContext());
 
-                if (isEditingExistingProject && editingMemeId != -1L) {
-                    Meme updated = new Meme(
+                if (isEditingExistingProject && editingProjectId != -1L) {
+                    Project updated = new Project(
                             projectNameToSave,
                             originalSaved.toString(),
                             previewSaved.toString(),
                             textItemsJson,
                             System.currentTimeMillis()
                     );
-                    updated.id = editingMemeId;
-                    db.memeDao().update(updated);
+                    updated.id = editingProjectId;
+                    db.projectDao().update(updated);
                 } else {
-                    Meme meme = new Meme(
+                    Project project = new Project(
                             projectNameToSave,
                             originalSaved.toString(),
                             previewSaved.toString(),
                             textItemsJson,
                             System.currentTimeMillis()
                     );
-                    long newId = db.memeDao().insert(meme);
-                    editingMemeId = newId;
+                    long newId = db.projectDao().insert(project);
+                    editingProjectId = newId;
                     isEditingExistingProject = true;
                 }
 
                 currentProjectName = projectNameToSave;
 
                 runOnUiThread(() ->
-                        Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, R.string.save_success, Toast.LENGTH_SHORT).show()
                 );
 
             } catch (Exception e) {
                 e.printStackTrace();
                 runOnUiThread(() ->
-                        Toast.makeText(this, "Ошибка сохранения проекта", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, R.string.save_project_error, Toast.LENGTH_SHORT).show()
                 );
             }
         }).start();
@@ -421,7 +423,7 @@ public class MainActivity extends AppCompatActivity {
         container.setPadding(pad, pad, pad, pad);
 
         EditText textInput = new EditText(this);
-        textInput.setHint("Введите текст");
+        textInput.setHint(R.string.enter_text_hint);
         textInput.setText(item.text);
         textInput.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
         textInput.setHintTextColor(0x99FFFFFF);
@@ -429,7 +431,7 @@ public class MainActivity extends AppCompatActivity {
         container.addView(textInput);
 
         EditText sizeInput = new EditText(this);
-        sizeInput.setHint("Размер текста");
+        sizeInput.setHint(R.string.text_size_hint);
         sizeInput.setText(String.valueOf(item.textSizeSp));
         sizeInput.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
         sizeInput.setHintTextColor(0x99FFFFFF);
@@ -437,11 +439,11 @@ public class MainActivity extends AppCompatActivity {
         container.addView(sizeInput);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Редактировать текст")
+                .setTitle(R.string.edit_text_title)
                 .setView(container)
-                .setPositiveButton("Сохранить", (d, which) -> {
+                .setPositiveButton(R.string.save_action, (d, which) -> {
                     String newText = textInput.getText().toString().trim();
-                    if (newText.isEmpty()) newText = "Текст";
+                    if (newText.isEmpty()) newText = getString(R.string.default_text);
 
                     float newSize;
                     try {
@@ -463,8 +465,8 @@ public class MainActivity extends AppCompatActivity {
 
                     viewModel.updateItem(index, updated);
                 })
-                .setNeutralButton("Удалить", (d, which) -> viewModel.removeItem(index))
-                .setNegativeButton("Отмена", null)
+                .setNeutralButton(R.string.action_delete, (d, which) -> viewModel.removeItem(index))
+                .setNegativeButton(R.string.action_cancel, null)
                 .create();
 
         dialog.show();
@@ -484,7 +486,7 @@ public class MainActivity extends AppCompatActivity {
                 android.view.Menu.NONE,
                 R.id.action_save,
                 android.view.Menu.NONE,
-                "Сохранить"
+                getString(R.string.save_action)
         );
 
         saveItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS);

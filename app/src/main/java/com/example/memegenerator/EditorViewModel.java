@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
 
-public class MemeViewModel extends ViewModel {
+public class EditorViewModel extends ViewModel {
 
     private final MutableLiveData<List<TextItem>> textItems =
             new MutableLiveData<>(new ArrayList<>());
