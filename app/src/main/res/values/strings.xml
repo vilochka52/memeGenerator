@@ -54,4 +54,17 @@
     <string name="welcome_title">Создавай. Редактируй. Преображай.</string>
     <string name="welcome_subtitle">SnapForge — современный редактор для работы с изображениями и проектами.</string>
     <string name="welcome_start">Начать</string>
+
+    <string name="projects_hero_title">SnapForge</string>
+    <string name="projects_hero_subtitle">Твои проекты, черновики и визуальные идеи в одном месте</string>
+    <string name="search_projects_hint">Поиск проектов</string>
+    <string name="filter_all">Все</string>
+
+
+    <string name="filter_recent">Неделя</string>
+    <string name="filter_saved">Ранее</string>
+
+    <string name="section_today">Сегодня</string>
+    <string name="section_recent">Недавно</string>
+    <string name="section_older">Ранее</string>
 </resources>

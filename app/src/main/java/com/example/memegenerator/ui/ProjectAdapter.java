@@ -2,7 +2,9 @@ package com.example.memegenerator.ui;
 
 import android.net.Uri;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -16,7 +18,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-public class ProjectAdapter extends RecyclerView.Adapter<ProjectAdapter.ProjectViewHolder> {
+public class ProjectAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     public interface Listener {
         void onOpen(Project item);
@@ -25,19 +27,30 @@ public class ProjectAdapter extends RecyclerView.Adapter<ProjectAdapter.ProjectV
         void onRename(Project item);
     }
 
-    private final List<Project> items;
+    private final List<ProjectListItem> items;
     private final Listener listener;
     private final SimpleDateFormat dateFormat =
             new SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault());
 
-    public ProjectAdapter(List<Project> items, Listener listener) {
+    public ProjectAdapter(List<ProjectListItem> items, Listener listener) {
         this.items = items;
         this.listener = listener;
     }
 
+    @Override
+    public int getItemViewType(int position) {
+        return items.get(position).type;
+    }
+
     @NonNull
     @Override
-    public ProjectViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == ProjectListItem.TYPE_HEADER) {
+            View view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_project_header, parent, false);
+            return new HeaderViewHolder(view);
+        }
+
         ItemProjectBinding binding = ItemProjectBinding.inflate(
                 LayoutInflater.from(parent.getContext()),
                 parent,
@@ -47,35 +60,52 @@ public class ProjectAdapter extends RecyclerView.Adapter<ProjectAdapter.ProjectV
     }
 
     @Override
-    public void onBindViewHolder(@NonNull ProjectViewHolder holder, int position) {
-        Project item = items.get(position);
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        ProjectListItem item = items.get(position);
 
-        String name = item.projectName != null && !item.projectName.trim().isEmpty()
-                ? item.projectName
-                : holder.itemView.getContext().getString(R.string.new_project);
-
-        String date = dateFormat.format(new Date(item.createdAt));
-
-        holder.binding.topText.setText(name);
-        holder.binding.bottomText.setText(R.string.rename_hint);
-        holder.binding.dateText.setText(date);
-
-        if (item.previewImagePath != null && !item.previewImagePath.trim().isEmpty()) {
-            holder.binding.thumb.setImageURI(Uri.parse(item.previewImagePath));
-        } else {
-            holder.binding.thumb.setImageDrawable(null);
+        if (holder instanceof HeaderViewHolder) {
+            ((HeaderViewHolder) holder).headerText.setText(item.headerTitle);
+            return;
         }
 
-        holder.binding.historyCard.setOnClickListener(v -> listener.onOpen(item));
-        holder.binding.editButton.setOnClickListener(v -> listener.onEdit(item));
-        holder.binding.deleteButton.setOnClickListener(v -> listener.onDelete(item));
-        holder.binding.topText.setOnClickListener(v -> listener.onRename(item));
-        holder.binding.bottomText.setOnClickListener(v -> listener.onRename(item));
+        Project project = item.project;
+        ProjectViewHolder vh = (ProjectViewHolder) holder;
+
+        String name = project.projectName != null && !project.projectName.trim().isEmpty()
+                ? project.projectName
+                : holder.itemView.getContext().getString(R.string.new_project);
+
+        String date = dateFormat.format(new Date(project.createdAt));
+
+        vh.binding.topText.setText(name);
+        vh.binding.bottomText.setText(R.string.rename_hint);
+        vh.binding.dateText.setText(date);
+
+        if (project.previewImagePath != null && !project.previewImagePath.trim().isEmpty()) {
+            vh.binding.thumb.setImageURI(Uri.parse(project.previewImagePath));
+        } else {
+            vh.binding.thumb.setImageDrawable(null);
+        }
+
+        vh.binding.historyCard.setOnClickListener(v -> listener.onOpen(project));
+        vh.binding.editButton.setOnClickListener(v -> listener.onEdit(project));
+        vh.binding.deleteButton.setOnClickListener(v -> listener.onDelete(project));
+        vh.binding.topText.setOnClickListener(v -> listener.onRename(project));
+        vh.binding.bottomText.setOnClickListener(v -> listener.onRename(project));
     }
 
     @Override
     public int getItemCount() {
         return items.size();
+    }
+
+    static class HeaderViewHolder extends RecyclerView.ViewHolder {
+        final TextView headerText;
+
+        HeaderViewHolder(@NonNull View itemView) {
+            super(itemView);
+            headerText = itemView.findViewById(R.id.headerText);
+        }
     }
 
     static class ProjectViewHolder extends RecyclerView.ViewHolder {
