@@ -5,7 +5,6 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.Editable;
-import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,7 +20,6 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
-import com.example.memegenerator.MainActivity;
 import com.example.memegenerator.R;
 import com.example.memegenerator.data.Project;
 import com.example.memegenerator.data.ProjectDatabase;
@@ -31,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
+import com.example.memegenerator.MainActivity;
 
 public class HistoryActivity extends AppCompatActivity {
 

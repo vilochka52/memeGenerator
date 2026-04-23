@@ -3,69 +3,69 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="12dp"
-    android:orientation="vertical"
     android:background="@drawable/bg_layer_item"
-    android:padding="14dp">
+    android:gravity="center_vertical"
+    android:minHeight="88dp"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <ImageView
+        android:id="@+id/layerThumb"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:background="@drawable/bg_layer_thumb"
+        android:scaleType="centerCrop" />
 
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
 
         <TextView
             android:id="@+id/layerName"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:textColor="@color/text_primary"
             android:textSize="15sp"
             android:textStyle="bold" />
 
-        <ImageButton
-            android:id="@+id/btnLayerVisible"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="@drawable/bg_glass_circle"
-            android:padding="8dp"
-            android:tint="@color/text_primary" />
+        <TextView
+            android:id="@+id/layerHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Зажми и перетащи"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
 
-        <ImageButton
-            android:id="@+id/btnMoveUp"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_glass_circle"
-            android:padding="8dp"
-            android:src="@drawable/ic_move_up"
-            android:tint="@color/text_primary" />
-
-        <ImageButton
-            android:id="@+id/btnMoveDown"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_glass_circle"
-            android:padding="8dp"
-            android:src="@drawable/ic_move_down"
-            android:tint="@color/text_primary" />
+        <SeekBar
+            android:id="@+id/layerOpacity"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:max="100"
+            android:progress="100" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/layerMeta"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:text="Прозрачность: 100%"
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp" />
+    <ImageButton
+        android:id="@+id/btnLayerVisible"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="10dp"
+        android:background="@drawable/bg_glass_circle"
+        android:padding="8dp"
+        android:tint="@color/text_primary" />
 
-    <SeekBar
-        android:id="@+id/layerOpacity"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:max="100"
-        android:progress="100" />
+    <ImageButton
+        android:id="@+id/btnLayerDelete"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/bg_glass_circle"
+        android:padding="8dp"
+        android:src="@drawable/ic_delete"
+        android:tint="@color/text_primary" />
 
 </LinearLayout>

@@ -1,13 +1,16 @@
 package com.example.memegenerator;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -22,17 +25,23 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.memegenerator.data.Project;
 import com.example.memegenerator.data.ProjectDatabase;
 import com.example.memegenerator.databinding.ActivityMainBinding;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.materialswitch.MaterialSwitch;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Stack;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -43,10 +52,28 @@ public class MainActivity extends AppCompatActivity {
     private long editingProjectId = -1L;
     private boolean isEditingExistingProject = false;
 
+    private boolean isCropMode = false;
+    private boolean isDrawMode = false;
+
     @Nullable
     private String currentOriginalImagePath = null;
 
     private String currentProjectName = "";
+
+    private final Stack<Bitmap> undoImageStack = new Stack<>();
+    private final Stack<Bitmap> redoImageStack = new Stack<>();
+
+    private static final int[] BRUSH_COLORS = new int[]{
+            0xFFFFFFFF,
+            0xFF000000,
+            0xFFFF3B30,
+            0xFFFF9500,
+            0xFFFFD60A,
+            0xFF34C759,
+            0xFF0A84FF,
+            0xFF5E5CE6,
+            0xFFFF2D55
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -154,6 +181,8 @@ public class MainActivity extends AppCompatActivity {
 
                     currentOriginalImagePath = localUri.toString();
                     binding.imageView.addImageBitmap(bmp);
+                    undoImageStack.clear();
+                    redoImageStack.clear();
                     updateEmptyState();
                 }
         );
@@ -195,39 +224,89 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupButtons() {
-        binding.btnBack.setOnClickListener(v -> finish());
-        binding.btnExportTop.setOnClickListener(v -> saveImage());
+        binding.btnBack.setOnClickListener(v -> {
+            if (isCropMode) {
+                exitCropMode(false);
+            } else if (isDrawMode) {
+                exitDrawMode();
+            } else {
+                finish();
+            }
+        });
 
-        binding.btnUndo.setOnClickListener(v -> viewModel.undo());
-        binding.btnRedo.setOnClickListener(v -> viewModel.redo());
-        binding.btnLayersTop.setOnClickListener(v -> showLayersSheet());
+        binding.btnExportTop.setOnClickListener(v -> {
+            if (isCropMode) {
+                applyCropMode();
+            } else {
+                saveImage();
+            }
+        });
 
-        binding.toolPickCard.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
-        binding.btnPick.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
+        binding.btnUndo.setOnClickListener(v -> {
+            if (isCropMode) return;
 
-        binding.toolCropCard.setOnClickListener(v ->
-                Toast.makeText(this, "Обрезка будет подключена следующим шагом", Toast.LENGTH_SHORT).show()
-        );
-        binding.btnCrop.setOnClickListener(v ->
-                Toast.makeText(this, "Обрезка будет подключена следующим шагом", Toast.LENGTH_SHORT).show()
-        );
+            boolean imageUndone = undoImageChange();
+            if (!imageUndone) {
+                viewModel.undo();
+            }
+        });
 
-        binding.toolTextCard.setOnClickListener(v -> addTextLayer());
-        binding.btnAddText.setOnClickListener(v -> addTextLayer());
+        binding.btnRedo.setOnClickListener(v -> {
+            if (isCropMode) return;
 
-        binding.toolDrawCard.setOnClickListener(v ->
-                Toast.makeText(this, "Рисование будет подключена следующим шагом", Toast.LENGTH_SHORT).show()
-        );
-        binding.btnDraw.setOnClickListener(v ->
-                Toast.makeText(this, "Рисование будет подключена следующим шагом", Toast.LENGTH_SHORT).show()
-        );
+            boolean imageRedone = redoImageChange();
+            if (!imageRedone) {
+                viewModel.redo();
+            }
+        });
 
-        binding.toolFiltersCard.setOnClickListener(v ->
-                Toast.makeText(this, "Фильтры будут подключены следующим шагом", Toast.LENGTH_SHORT).show()
-        );
-        binding.btnFilters.setOnClickListener(v ->
-                Toast.makeText(this, "Фильтры будут подключены следующим шагом", Toast.LENGTH_SHORT).show()
-        );
+        binding.btnLayersTop.setOnClickListener(v -> {
+            if (isCropMode || isDrawMode) return;
+            showLayersSheet();
+        });
+
+        binding.toolPickCard.setOnClickListener(v -> {
+            if (isCropMode || isDrawMode) return;
+            pickImageLauncher.launch("image/*");
+        });
+
+        binding.btnPick.setOnClickListener(v -> {
+            if (isCropMode || isDrawMode) return;
+            pickImageLauncher.launch("image/*");
+        });
+
+        binding.toolCropCard.setOnClickListener(v -> {
+            if (isDrawMode) return;
+            onCropClicked();
+        });
+
+        binding.btnCrop.setOnClickListener(v -> {
+            if (isDrawMode) return;
+            onCropClicked();
+        });
+
+        binding.toolTextCard.setOnClickListener(v -> {
+            if (isCropMode || isDrawMode) return;
+            addTextLayer();
+        });
+
+        binding.btnAddText.setOnClickListener(v -> {
+            if (isCropMode || isDrawMode) return;
+            addTextLayer();
+        });
+
+        binding.toolDrawCard.setOnClickListener(v -> onDrawClicked());
+        binding.btnDraw.setOnClickListener(v -> onDrawClicked());
+
+        binding.toolFiltersCard.setOnClickListener(v -> {
+            if (isCropMode || isDrawMode) return;
+            Toast.makeText(this, "Фильтры будут подключены следующим шагом", Toast.LENGTH_SHORT).show();
+        });
+
+        binding.btnFilters.setOnClickListener(v -> {
+            if (isCropMode || isDrawMode) return;
+            Toast.makeText(this, "Фильтры будут подключены следующим шагом", Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void addTextLayer() {
@@ -242,129 +321,171 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showLayersSheet() {
-        BottomSheetDialog dialog = new BottomSheetDialog(this);
+        BottomSheetDialog dialog = new BottomSheetDialog(
+                this,
+                com.google.android.material.R.style.Theme_Design_BottomSheetDialog
+        );
+
         View sheet = LayoutInflater.from(this).inflate(R.layout.sheet_layers, null, false);
         dialog.setContentView(sheet);
 
-        TextView summary = sheet.findViewById(R.id.layersSummary);
-        LinearLayout container = sheet.findViewById(R.id.layersContainer);
-
-        List<TextItem> items = viewModel.getTextItems().getValue();
-        final List<TextItem> textItems = items != null ? items : new ArrayList<>();
-
-        boolean hasImage = binding.imageView.hasImage();
-        String summaryText = "Фон: " + (hasImage ? "есть" : "нет") + " • Текстов: " + textItems.size();
-        summary.setText(summaryText);
-
-        container.removeAllViews();
-
-        if (hasImage) {
-            View row = LayoutInflater.from(this).inflate(R.layout.item_layer_row, container, false);
-
-            TextView layerName = row.findViewById(R.id.layerName);
-            TextView layerMeta = row.findViewById(R.id.layerMeta);
-            android.widget.ImageButton btnVisible = row.findViewById(R.id.btnLayerVisible);
-            android.widget.ImageButton btnUp = row.findViewById(R.id.btnMoveUp);
-            android.widget.ImageButton btnDown = row.findViewById(R.id.btnMoveDown);
-            android.widget.SeekBar opacity = row.findViewById(R.id.layerOpacity);
-
-            layerName.setText("Фон");
-            layerMeta.setText("Прозрачность: " + Math.round(binding.imageView.getBaseImageAlpha() * 100) + "%");
-
-            boolean visible = binding.imageView.isBaseImageVisible();
-            btnVisible.setImageResource(visible ? R.drawable.ic_visibility : R.drawable.ic_visibility_off);
-
-            btnVisible.setOnClickListener(v -> {
-                binding.imageView.setBaseImageVisible(!binding.imageView.isBaseImageVisible());
-                dialog.dismiss();
-                showLayersSheet();
-            });
-
-            btnUp.setVisibility(View.INVISIBLE);
-            btnDown.setVisibility(View.INVISIBLE);
-
-            opacity.setProgress(Math.round(binding.imageView.getBaseImageAlpha() * 100));
-            opacity.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-                @Override
-                public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
-                    float alpha = progress / 100f;
-                    binding.imageView.setBaseImageAlpha(alpha);
-                    layerMeta.setText("Прозрачность: " + progress + "%");
-                }
-
-                @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) {}
-                @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) {}
-            });
-
-            container.addView(row);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setDimAmount(0.55f);
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         }
 
-        for (int i = textItems.size() - 1; i >= 0; i--) {
-            final int index = i;
-            final TextItem item = textItems.get(i);
+        RecyclerView recycler = sheet.findViewById(R.id.layersRecycler);
+        recycler.setLayoutManager(new LinearLayoutManager(this));
 
-            View row = LayoutInflater.from(this).inflate(R.layout.item_layer_row, container, false);
+        final LayerAdapter[] adapterRef = new LayerAdapter[1];
 
-            TextView layerName = row.findViewById(R.id.layerName);
-            TextView layerMeta = row.findViewById(R.id.layerMeta);
-            android.widget.ImageButton btnVisible = row.findViewById(R.id.btnLayerVisible);
-            android.widget.ImageButton btnUp = row.findViewById(R.id.btnMoveUp);
-            android.widget.ImageButton btnDown = row.findViewById(R.id.btnMoveDown);
-            android.widget.SeekBar opacity = row.findViewById(R.id.layerOpacity);
+        LayerAdapter adapter = new LayerAdapter(new LayerAdapter.Listener() {
+            @Override
+            public void onToggleVisibility(@NonNull LayerRowItem item) {
+                if (item.isImageLayer()) {
+                    binding.imageView.setBaseImageVisible(!binding.imageView.isBaseImageVisible());
+                } else if (item.isDrawLayer()) {
+                    binding.imageView.setDrawLayerVisible(!binding.imageView.isDrawLayerVisible());
+                } else {
+                    viewModel.setItemVisible(item.textIndex, !item.visible);
+                }
 
-            String title = item.text != null && !item.text.trim().isEmpty() ? item.text : "Текст";
-            if (title.length() > 18) {
-                title = title.substring(0, 18) + "...";
+                if (adapterRef[0] != null) {
+                    refreshLayersAdapter(adapterRef[0]);
+                }
             }
 
-            layerName.setText("Текст: " + title);
-            layerMeta.setText("Прозрачность: " + Math.round(item.alpha * 100) + "%");
-
-            btnVisible.setImageResource(item.visible ? R.drawable.ic_visibility : R.drawable.ic_visibility_off);
-            btnVisible.setOnClickListener(v -> {
-                viewModel.setItemVisible(index, !item.visible);
-                dialog.dismiss();
-                showLayersSheet();
-            });
-
-            btnUp.setOnClickListener(v -> {
-                viewModel.moveItemUp(index);
-                dialog.dismiss();
-                showLayersSheet();
-            });
-
-            btnDown.setOnClickListener(v -> {
-                viewModel.moveItemDown(index);
-                dialog.dismiss();
-                showLayersSheet();
-            });
-
-            opacity.setProgress(Math.round(item.alpha * 100));
-            opacity.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-                @Override
-                public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
-                    float alpha = progress / 100f;
-                    viewModel.setItemAlpha(index, alpha);
-                    layerMeta.setText("Прозрачность: " + progress + "%");
+            @Override
+            public void onDelete(@NonNull LayerRowItem item) {
+                if (item.isImageLayer()) {
+                    binding.imageView.clearBaseImage();
+                    updateEmptyState();
+                } else if (item.isDrawLayer()) {
+                    binding.imageView.clearDrawLayer();
+                } else {
+                    viewModel.deleteItem(item.textIndex);
                 }
 
-                @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) {}
-                @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) {}
-            });
+                if (adapterRef[0] != null) {
+                    refreshLayersAdapter(adapterRef[0]);
+                }
+            }
 
-            container.addView(row);
-        }
+            @Override
+            public void onOpacityChanged(@NonNull LayerRowItem item, float alpha) {
+                if (item.isImageLayer()) {
+                    binding.imageView.setBaseImageAlpha(alpha);
+                } else if (item.isDrawLayer()) {
+                    binding.imageView.setDrawLayerAlpha(alpha);
+                } else {
+                    viewModel.setItemAlpha(item.textIndex, alpha);
+                }
+            }
 
-        if (!hasImage && textItems.isEmpty()) {
-            TextView empty = new TextView(this);
-            empty.setText("Слоёв пока нет");
-            empty.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
-            empty.setTextSize(14f);
-            empty.setPadding(0, dp(8), 0, dp(8));
-            container.addView(empty);
-        }
+            @Override
+            public void onMove(int fromPosition, int toPosition) {
+                if (adapterRef[0] == null) return;
 
+                List<LayerRowItem> rows = adapterRef[0].getItems();
+                if (fromPosition < 0 || toPosition < 0 || fromPosition >= rows.size() || toPosition >= rows.size()) {
+                    return;
+                }
+
+                LayerRowItem fromItem = rows.get(fromPosition);
+                LayerRowItem toItem = rows.get(toPosition);
+
+                if (fromItem.isTextLayer() && toItem.isTextLayer()) {
+                    viewModel.swapItems(fromItem.textIndex, toItem.textIndex);
+                    refreshLayersAdapter(adapterRef[0]);
+                }
+            }
+        });
+
+        adapterRef[0] = adapter;
+        recycler.setAdapter(adapter);
+
+        ItemTouchHelper touchHelper =
+                new ItemTouchHelper(
+                        new ItemTouchHelper.SimpleCallback(
+                                ItemTouchHelper.UP | ItemTouchHelper.DOWN,
+                                0
+                        ) {
+                            @Override
+                            public boolean onMove(@NonNull RecyclerView recyclerView,
+                                                  @NonNull RecyclerView.ViewHolder viewHolder,
+                                                  @NonNull RecyclerView.ViewHolder target) {
+                                int from = viewHolder.getBindingAdapterPosition();
+                                int to = target.getBindingAdapterPosition();
+                                adapter.onItemMove(from, to);
+                                return true;
+                            }
+
+                            @Override
+                            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+                            }
+
+                            @Override
+                            public boolean isLongPressDragEnabled() {
+                                return true;
+                            }
+                        });
+
+        touchHelper.attachToRecyclerView(recycler);
+
+        refreshLayersAdapter(adapter);
         dialog.show();
+    }
+
+    private void refreshLayersAdapter(@NonNull LayerAdapter adapter) {
+        List<LayerRowItem> rows = new ArrayList<>();
+
+        if (binding.imageView.hasImage()) {
+            Bitmap thumb = binding.imageView.getBaseThumbnail(dp(56));
+            rows.add(new LayerRowItem(
+                    LayerRowItem.TYPE_IMAGE,
+                    -1,
+                    "Фон",
+                    binding.imageView.isBaseImageVisible(),
+                    binding.imageView.getBaseImageAlpha(),
+                    thumb
+            ));
+        }
+
+        if (binding.imageView.hasDrawLayer()) {
+            rows.add(new LayerRowItem(
+                    LayerRowItem.TYPE_DRAW,
+                    -1,
+                    "Рисование",
+                    binding.imageView.isDrawLayerVisible(),
+                    binding.imageView.getDrawLayerAlpha(),
+                    null
+            ));
+        }
+
+        List<TextItem> textItems = viewModel.getTextItems().getValue();
+        if (textItems != null) {
+            for (int i = 0; i < textItems.size(); i++) {
+                TextItem item = textItems.get(i);
+                String title = item.text == null || item.text.trim().isEmpty()
+                        ? "Текст"
+                        : item.text.trim();
+
+                if (title.length() > 18) {
+                    title = title.substring(0, 18) + "...";
+                }
+
+                rows.add(new LayerRowItem(
+                        LayerRowItem.TYPE_TEXT,
+                        i,
+                        title,
+                        item.visible,
+                        item.alpha,
+                        null
+                ));
+            }
+        }
+
+        adapter.submitList(rows);
     }
 
     private void handleEditIntent() {
@@ -599,7 +720,9 @@ public class MainActivity extends AppCompatActivity {
                             item.typefaceStyle,
                             item.color,
                             item.align,
-                            item.boxWidth
+                            item.boxWidth,
+                            item.visible,
+                            item.alpha
                     );
 
                     viewModel.updateItem(index, updated);
@@ -609,5 +732,200 @@ public class MainActivity extends AppCompatActivity {
                 .create();
 
         dialog.show();
+    }
+
+    private void onCropClicked() {
+        if (!binding.imageView.hasImage()) {
+            Toast.makeText(this, R.string.pick_first, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (isDrawMode) return;
+
+        if (!isCropMode) {
+            enterCropMode();
+        } else {
+            applyCropMode();
+        }
+    }
+
+    private void enterCropMode() {
+        isCropMode = true;
+        binding.imageView.startCropMode();
+
+        binding.btnExportTop.setText("Применить");
+        Toast.makeText(this, "Режим обрезки включён", Toast.LENGTH_SHORT).show();
+    }
+
+    private void exitCropMode(boolean keepChanges) {
+        isCropMode = false;
+
+        if (!keepChanges) {
+            binding.imageView.cancelCropMode();
+        }
+
+        binding.btnExportTop.setText(getString(R.string.export_action));
+    }
+
+    private void applyCropMode() {
+        pushImageStateToUndo();
+
+        boolean success = binding.imageView.applyCropAndReplaceBase();
+        if (!success) {
+            if (!undoImageStack.isEmpty()) {
+                undoImageStack.pop();
+            }
+            Toast.makeText(this, "Не удалось применить обрезку", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        updateEmptyState();
+        exitCropMode(true);
+        Toast.makeText(this, "Обрезка применена", Toast.LENGTH_SHORT).show();
+    }
+
+    private void onDrawClicked() {
+        if (!binding.imageView.hasImage()) {
+            Toast.makeText(this, R.string.pick_first, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (isCropMode) return;
+
+        if (!isDrawMode) {
+            enterDrawMode();
+        } else {
+            showBrushSettingsSheet();
+        }
+    }
+
+    private void enterDrawMode() {
+        isDrawMode = true;
+        binding.imageView.setDrawMode(true);
+        binding.btnExportTop.setText(getString(R.string.export_action));
+        Toast.makeText(this, "Режим рисования включён", Toast.LENGTH_SHORT).show();
+        showBrushSettingsSheet();
+    }
+
+    private void exitDrawMode() {
+        isDrawMode = false;
+        binding.imageView.setDrawMode(false);
+        Toast.makeText(this, "Режим рисования выключен", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showBrushSettingsSheet() {
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
+        View sheet = LayoutInflater.from(this).inflate(R.layout.sheet_brush_settings, null, false);
+        dialog.setContentView(sheet);
+
+        MaterialSwitch eraserSwitch = sheet.findViewById(R.id.switchEraser);
+        SeekBar sizeSeek = sheet.findViewById(R.id.seekBrushSize);
+        TextView sizeValue = sheet.findViewById(R.id.brushSizeValue);
+        View colorRow = sheet.findViewById(R.id.colorRow);
+        MaterialButton btnCloseDraw = sheet.findViewById(R.id.btnCloseDraw);
+        MaterialButton btnClearDraw = sheet.findViewById(R.id.btnClearDraw);
+
+        eraserSwitch.setChecked(binding.imageView.isEraserMode());
+
+        int sizeDp = Math.round(binding.imageView.getBrushSizeDp());
+        sizeDp = Math.max(4, Math.min(sizeDp, 72));
+        sizeSeek.setProgress(sizeDp);
+        sizeValue.setText(sizeDp + " dp");
+
+        eraserSwitch.setOnCheckedChangeListener((buttonView, isChecked) ->
+                binding.imageView.setEraserMode(isChecked)
+        );
+
+        sizeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int safe = Math.max(4, progress);
+                binding.imageView.setBrushSizeDp(safe);
+                sizeValue.setText(safe + " dp");
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
+        if (colorRow instanceof LinearLayout) {
+            LinearLayout colorsWrap = (LinearLayout) colorRow;
+            colorsWrap.removeAllViews();
+
+            for (int color : BRUSH_COLORS) {
+                View swatch = new View(this);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(28), dp(28));
+                lp.rightMargin = dp(10);
+                swatch.setLayoutParams(lp);
+                swatch.setBackground(makeCircleDrawable(color));
+                swatch.setOnClickListener(v -> {
+                    binding.imageView.setBrushColor(color);
+                    binding.imageView.setEraserMode(false);
+                    eraserSwitch.setChecked(false);
+                });
+                colorsWrap.addView(swatch);
+            }
+        }
+
+        btnClearDraw.setOnClickListener(v -> {
+            binding.imageView.clearDrawLayer();
+            Toast.makeText(this, "Слой рисования очищен", Toast.LENGTH_SHORT).show();
+        });
+
+        btnCloseDraw.setOnClickListener(v -> {
+            dialog.dismiss();
+            exitDrawMode();
+        });
+
+        dialog.show();
+    }
+
+    private android.graphics.drawable.Drawable makeCircleDrawable(int color) {
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        d.setColor(color);
+        d.setStroke(dp(1), 0x33FFFFFF);
+        return d;
+    }
+
+    private void pushImageStateToUndo() {
+        Bitmap snapshot = binding.imageView.getBaseBitmapCopy();
+        if (snapshot != null) {
+            undoImageStack.push(snapshot);
+            redoImageStack.clear();
+        }
+    }
+
+    private boolean undoImageChange() {
+        if (undoImageStack.isEmpty()) return false;
+
+        Bitmap current = binding.imageView.getBaseBitmapCopy();
+        if (current != null) {
+            redoImageStack.push(current);
+        }
+
+        Bitmap previous = undoImageStack.pop();
+        binding.imageView.replaceBaseBitmap(previous);
+        updateEmptyState();
+        return true;
+    }
+
+    private boolean redoImageChange() {
+        if (redoImageStack.isEmpty()) return false;
+
+        Bitmap current = binding.imageView.getBaseBitmapCopy();
+        if (current != null) {
+            undoImageStack.push(current);
+        }
+
+        Bitmap next = redoImageStack.pop();
+        binding.imageView.replaceBaseBitmap(next);
+        updateEmptyState();
+        return true;
     }
 }

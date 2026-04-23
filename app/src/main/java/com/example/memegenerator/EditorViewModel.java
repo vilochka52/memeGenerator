@@ -8,6 +8,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Stack;
 
@@ -57,7 +58,9 @@ public class EditorViewModel extends ViewModel {
                 Typeface.NORMAL,
                 Color.WHITE,
                 TextItem.ALIGN_CENTER,
-                0f
+                0f,
+                true,
+                1f
         ));
         textItems.setValue(list);
     }
@@ -80,26 +83,13 @@ public class EditorViewModel extends ViewModel {
         textItems.setValue(current);
     }
 
-    public void undo() {
-        if (!undoStack.isEmpty()) {
-            redoStack.push(copy(textItems.getValue()));
-            textItems.setValue(undoStack.pop());
-        }
-    }
+    public void deleteItem(int index) {
+        List<TextItem> current = copy(textItems.getValue());
+        if (index < 0 || index >= current.size()) return;
 
-    public void redo() {
-        if (!redoStack.isEmpty()) {
-            undoStack.push(copy(textItems.getValue()));
-            textItems.setValue(redoStack.pop());
-        }
-    }
-
-    public String exportToJson() {
-        List<TextItem> list = textItems.getValue();
-        if (list == null) {
-            list = new ArrayList<>();
-        }
-        return new com.google.gson.Gson().toJson(list);
+        saveState();
+        current.remove(index);
+        textItems.setValue(current);
     }
 
     public void setItemVisible(int index, boolean visible) {
@@ -154,8 +144,7 @@ public class EditorViewModel extends ViewModel {
 
         saveState();
 
-        TextItem item = current.remove(index);
-        current.add(index - 1, item);
+        Collections.swap(current, index, index - 1);
         textItems.setValue(current);
     }
 
@@ -165,8 +154,40 @@ public class EditorViewModel extends ViewModel {
 
         saveState();
 
-        TextItem item = current.remove(index);
-        current.add(index + 1, item);
+        Collections.swap(current, index, index + 1);
         textItems.setValue(current);
+    }
+
+    public void swapItems(int from, int to) {
+        List<TextItem> current = copy(textItems.getValue());
+        if (from < 0 || to < 0 || from >= current.size() || to >= current.size()) return;
+
+        saveState();
+
+        TextItem item = current.remove(from);
+        current.add(to, item);
+        textItems.setValue(current);
+    }
+
+    public void undo() {
+        if (!undoStack.isEmpty()) {
+            redoStack.push(copy(textItems.getValue()));
+            textItems.setValue(undoStack.pop());
+        }
+    }
+
+    public void redo() {
+        if (!redoStack.isEmpty()) {
+            undoStack.push(copy(textItems.getValue()));
+            textItems.setValue(redoStack.pop());
+        }
+    }
+
+    public String exportToJson() {
+        List<TextItem> list = textItems.getValue();
+        if (list == null) {
+            list = new ArrayList<>();
+        }
+        return new com.google.gson.Gson().toJson(list);
     }
 }
