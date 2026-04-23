@@ -118,4 +118,17 @@ public class LayerAdapter extends RecyclerView.Adapter<LayerAdapter.LayerViewHol
             btnLayerDelete = itemView.findViewById(R.id.btnLayerDelete);
         }
     }
+
+    public void onItemMove(int fromPosition, int toPosition) {
+        if (fromPosition < 0 || toPosition < 0
+                || fromPosition >= items.size()
+                || toPosition >= items.size()) return;
+
+        Collections.swap(items, fromPosition, toPosition);
+        notifyItemMoved(fromPosition, toPosition);
+
+        if (listener != null) {
+            listener.onMove(fromPosition, toPosition);
+        }
+    }
 }

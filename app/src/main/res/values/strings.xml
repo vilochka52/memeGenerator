@@ -90,4 +90,6 @@
     <string name="export_draft">Сохранить как черновик</string>
     <string name="export_subtitle">Выбери, что сделать с проектом</string>
 
+    <string name="export_action">Экспорт</string>
+
 </resources>

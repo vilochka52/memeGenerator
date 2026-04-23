@@ -1,13 +1,15 @@
 package com.example.memegenerator;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
@@ -33,8 +35,7 @@ import com.example.memegenerator.data.Project;
 import com.example.memegenerator.data.ProjectDatabase;
 import com.example.memegenerator.databinding.ActivityMainBinding;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
-import com.google.android.material.button.MaterialButton;
-import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.slider.Slider;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -54,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean isCropMode = false;
     private boolean isDrawMode = false;
+    private boolean isFilterMode = false;
 
     @Nullable
     private String currentOriginalImagePath = null;
@@ -63,17 +65,13 @@ public class MainActivity extends AppCompatActivity {
     private final Stack<Bitmap> undoImageStack = new Stack<>();
     private final Stack<Bitmap> redoImageStack = new Stack<>();
 
-    private static final int[] BRUSH_COLORS = new int[]{
-            0xFFFFFFFF,
-            0xFF000000,
-            0xFFFF3B30,
-            0xFFFF9500,
-            0xFFFFD60A,
-            0xFF34C759,
-            0xFF0A84FF,
-            0xFF5E5CE6,
-            0xFFFF2D55
-    };
+    @Nullable
+    private Bitmap pendingFilterSourceBitmap = null;
+
+    private final FilterState currentFilterState = new FilterState();
+
+    // ВАЖНО: блокируем промежуточные apply при программной установке слайдеров
+    private boolean isUpdatingFilterControls = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -103,7 +101,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateEmptyState() {
         if (binding == null) return;
-
         boolean hasImage = binding.imageView != null && binding.imageView.hasImage();
         binding.emptyState.setVisibility(hasImage ? View.GONE : View.VISIBLE);
     }
@@ -181,8 +178,11 @@ public class MainActivity extends AppCompatActivity {
 
                     currentOriginalImagePath = localUri.toString();
                     binding.imageView.addImageBitmap(bmp);
+
                     undoImageStack.clear();
                     redoImageStack.clear();
+                    resetFilterState();
+
                     updateEmptyState();
                 }
         );
@@ -229,6 +229,8 @@ public class MainActivity extends AppCompatActivity {
                 exitCropMode(false);
             } else if (isDrawMode) {
                 exitDrawMode();
+            } else if (isFilterMode) {
+                cancelFilterMode();
             } else {
                 finish();
             }
@@ -237,13 +239,15 @@ public class MainActivity extends AppCompatActivity {
         binding.btnExportTop.setOnClickListener(v -> {
             if (isCropMode) {
                 applyCropMode();
+            } else if (isFilterMode) {
+                applyFilterChanges();
             } else {
                 saveImage();
             }
         });
 
         binding.btnUndo.setOnClickListener(v -> {
-            if (isCropMode) return;
+            if (isCropMode || isDrawMode || isFilterMode) return;
 
             boolean imageUndone = undoImageChange();
             if (!imageUndone) {
@@ -252,7 +256,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         binding.btnRedo.setOnClickListener(v -> {
-            if (isCropMode) return;
+            if (isCropMode || isDrawMode || isFilterMode) return;
 
             boolean imageRedone = redoImageChange();
             if (!imageRedone) {
@@ -261,52 +265,38 @@ public class MainActivity extends AppCompatActivity {
         });
 
         binding.btnLayersTop.setOnClickListener(v -> {
-            if (isCropMode || isDrawMode) return;
+            if (isCropMode || isDrawMode || isFilterMode) return;
             showLayersSheet();
         });
 
         binding.toolPickCard.setOnClickListener(v -> {
-            if (isCropMode || isDrawMode) return;
+            if (isCropMode || isDrawMode || isFilterMode) return;
             pickImageLauncher.launch("image/*");
         });
 
         binding.btnPick.setOnClickListener(v -> {
-            if (isCropMode || isDrawMode) return;
+            if (isCropMode || isDrawMode || isFilterMode) return;
             pickImageLauncher.launch("image/*");
         });
 
-        binding.toolCropCard.setOnClickListener(v -> {
-            if (isDrawMode) return;
-            onCropClicked();
-        });
-
-        binding.btnCrop.setOnClickListener(v -> {
-            if (isDrawMode) return;
-            onCropClicked();
-        });
+        binding.toolCropCard.setOnClickListener(v -> onCropClicked());
+        binding.btnCrop.setOnClickListener(v -> onCropClicked());
 
         binding.toolTextCard.setOnClickListener(v -> {
-            if (isCropMode || isDrawMode) return;
+            if (isCropMode || isDrawMode || isFilterMode) return;
             addTextLayer();
         });
 
         binding.btnAddText.setOnClickListener(v -> {
-            if (isCropMode || isDrawMode) return;
+            if (isCropMode || isDrawMode || isFilterMode) return;
             addTextLayer();
         });
 
         binding.toolDrawCard.setOnClickListener(v -> onDrawClicked());
         binding.btnDraw.setOnClickListener(v -> onDrawClicked());
 
-        binding.toolFiltersCard.setOnClickListener(v -> {
-            if (isCropMode || isDrawMode) return;
-            Toast.makeText(this, "Фильтры будут подключены следующим шагом", Toast.LENGTH_SHORT).show();
-        });
-
-        binding.btnFilters.setOnClickListener(v -> {
-            if (isCropMode || isDrawMode) return;
-            Toast.makeText(this, "Фильтры будут подключены следующим шагом", Toast.LENGTH_SHORT).show();
-        });
+        binding.toolFiltersCard.setOnClickListener(v -> onFiltersClicked());
+        binding.btnFilters.setOnClickListener(v -> onFiltersClicked());
     }
 
     private void addTextLayer() {
@@ -350,9 +340,7 @@ public class MainActivity extends AppCompatActivity {
                     viewModel.setItemVisible(item.textIndex, !item.visible);
                 }
 
-                if (adapterRef[0] != null) {
-                    refreshLayersAdapter(adapterRef[0]);
-                }
+                refreshLayersAdapter(adapter);
             }
 
             @Override
@@ -361,14 +349,12 @@ public class MainActivity extends AppCompatActivity {
                     binding.imageView.clearBaseImage();
                     updateEmptyState();
                 } else if (item.isDrawLayer()) {
-                    binding.imageView.clearDrawLayer();
+                    binding.imageView.replaceDrawBitmap(null);
                 } else {
-                    viewModel.deleteItem(item.textIndex);
+                    viewModel.removeItem(item.textIndex);
                 }
 
-                if (adapterRef[0] != null) {
-                    refreshLayersAdapter(adapterRef[0]);
-                }
+                refreshLayersAdapter(adapter);
             }
 
             @Override
@@ -384,9 +370,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onMove(int fromPosition, int toPosition) {
-                if (adapterRef[0] == null) return;
-
-                List<LayerRowItem> rows = adapterRef[0].getItems();
+                List<LayerRowItem> rows = adapter.getItems();
                 if (fromPosition < 0 || toPosition < 0 || fromPosition >= rows.size() || toPosition >= rows.size()) {
                     return;
                 }
@@ -396,7 +380,7 @@ public class MainActivity extends AppCompatActivity {
 
                 if (fromItem.isTextLayer() && toItem.isTextLayer()) {
                     viewModel.swapItems(fromItem.textIndex, toItem.textIndex);
-                    refreshLayersAdapter(adapterRef[0]);
+                    refreshLayersAdapter(adapter);
                 }
             }
         });
@@ -404,31 +388,43 @@ public class MainActivity extends AppCompatActivity {
         adapterRef[0] = adapter;
         recycler.setAdapter(adapter);
 
-        ItemTouchHelper touchHelper =
-                new ItemTouchHelper(
-                        new ItemTouchHelper.SimpleCallback(
-                                ItemTouchHelper.UP | ItemTouchHelper.DOWN,
-                                0
-                        ) {
-                            @Override
-                            public boolean onMove(@NonNull RecyclerView recyclerView,
-                                                  @NonNull RecyclerView.ViewHolder viewHolder,
-                                                  @NonNull RecyclerView.ViewHolder target) {
-                                int from = viewHolder.getBindingAdapterPosition();
-                                int to = target.getBindingAdapterPosition();
-                                adapter.onItemMove(from, to);
-                                return true;
-                            }
+        ItemTouchHelper touchHelper = new ItemTouchHelper(
+                new ItemTouchHelper.SimpleCallback(
+                        ItemTouchHelper.UP | ItemTouchHelper.DOWN,
+                        0
+                ) {
+                    @Override
+                    public boolean onMove(@NonNull RecyclerView recyclerView,
+                                          @NonNull RecyclerView.ViewHolder viewHolder,
+                                          @NonNull RecyclerView.ViewHolder target) {
+                        int from = viewHolder.getBindingAdapterPosition();
+                        int to = target.getBindingAdapterPosition();
 
-                            @Override
-                            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-                            }
+                        adapter.moveItem(from, to);
 
-                            @Override
-                            public boolean isLongPressDragEnabled() {
-                                return true;
+                        List<LayerRowItem> rows = adapter.getItems();
+                        if (from >= 0 && to >= 0 && from < rows.size() && to < rows.size()) {
+                            LayerRowItem a = rows.get(from);
+                            LayerRowItem b = rows.get(to);
+
+                            if (a.isTextLayer() && b.isTextLayer()) {
+                                viewModel.swapItems(a.textIndex, b.textIndex);
                             }
-                        });
+                        }
+
+                        refreshLayersAdapter(adapter);
+                        return true;
+                    }
+
+                    @Override
+                    public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+                    }
+
+                    @Override
+                    public boolean isLongPressDragEnabled() {
+                        return true;
+                    }
+                });
 
         touchHelper.attachToRecyclerView(recycler);
 
@@ -570,7 +566,6 @@ public class MainActivity extends AppCompatActivity {
                 int color = o.optInt("color", 0xFFFFFFFF);
                 int align = o.optInt("align", TextItem.ALIGN_CENTER);
                 float boxWidth = (float) o.optDouble("boxWidth", 0f);
-
                 boolean visible = o.optBoolean("visible", true);
                 float alpha = (float) o.optDouble("alpha", 1f);
 
@@ -740,8 +735,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        if (isDrawMode) return;
-
         if (!isCropMode) {
             enterCropMode();
         } else {
@@ -752,7 +745,6 @@ public class MainActivity extends AppCompatActivity {
     private void enterCropMode() {
         isCropMode = true;
         binding.imageView.startCropMode();
-
         binding.btnExportTop.setText("Применить");
         Toast.makeText(this, "Режим обрезки включён", Toast.LENGTH_SHORT).show();
     }
@@ -764,7 +756,7 @@ public class MainActivity extends AppCompatActivity {
             binding.imageView.cancelCropMode();
         }
 
-        binding.btnExportTop.setText(getString(R.string.export_action));
+        binding.btnExportTop.setText("Экспорт");
     }
 
     private void applyCropMode() {
@@ -779,6 +771,8 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        redoImageStack.clear();
+        resetFilterState();
         updateEmptyState();
         exitCropMode(true);
         Toast.makeText(this, "Обрезка применена", Toast.LENGTH_SHORT).show();
@@ -790,107 +784,277 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        if (isCropMode) return;
-
-        if (!isDrawMode) {
-            enterDrawMode();
+        if (isDrawMode) {
+            exitDrawMode();
         } else {
-            showBrushSettingsSheet();
+            enterDrawMode();
         }
     }
 
     private void enterDrawMode() {
         isDrawMode = true;
         binding.imageView.setDrawMode(true);
-        binding.btnExportTop.setText(getString(R.string.export_action));
-        Toast.makeText(this, "Режим рисования включён", Toast.LENGTH_SHORT).show();
+        binding.btnExportTop.setText("Готово");
         showBrushSettingsSheet();
     }
 
     private void exitDrawMode() {
         isDrawMode = false;
         binding.imageView.setDrawMode(false);
-        Toast.makeText(this, "Режим рисования выключен", Toast.LENGTH_SHORT).show();
+        binding.btnExportTop.setText("Экспорт");
     }
 
     private void showBrushSettingsSheet() {
         BottomSheetDialog dialog = new BottomSheetDialog(this);
-        View sheet = LayoutInflater.from(this).inflate(R.layout.sheet_brush_settings, null, false);
+        View sheet = LayoutInflater.from(this).inflate(R.layout.sheet_brush, null, false);
         dialog.setContentView(sheet);
 
-        MaterialSwitch eraserSwitch = sheet.findViewById(R.id.switchEraser);
-        SeekBar sizeSeek = sheet.findViewById(R.id.seekBrushSize);
-        TextView sizeValue = sheet.findViewById(R.id.brushSizeValue);
-        View colorRow = sheet.findViewById(R.id.colorRow);
-        MaterialButton btnCloseDraw = sheet.findViewById(R.id.btnCloseDraw);
-        MaterialButton btnClearDraw = sheet.findViewById(R.id.btnClearDraw);
+        View eraserToggle = sheet.findViewById(R.id.eraserToggle);
+        SeekBar brushSize = sheet.findViewById(R.id.brushSizeSeek);
+        LinearLayout colorsRow = sheet.findViewById(R.id.colorsRow);
 
-        eraserSwitch.setChecked(binding.imageView.isEraserMode());
-
-        int sizeDp = Math.round(binding.imageView.getBrushSizeDp());
-        sizeDp = Math.max(4, Math.min(sizeDp, 72));
-        sizeSeek.setProgress(sizeDp);
-        sizeValue.setText(sizeDp + " dp");
-
-        eraserSwitch.setOnCheckedChangeListener((buttonView, isChecked) ->
-                binding.imageView.setEraserMode(isChecked)
-        );
-
-        sizeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        brushSize.setProgress(18);
+        brushSize.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                int safe = Math.max(4, progress);
-                binding.imageView.setBrushSizeDp(safe);
-                sizeValue.setText(safe + " dp");
+                float size = Math.max(2f, progress);
+                binding.imageView.setBrushSizeDp(size);
             }
 
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        if (colorRow instanceof LinearLayout) {
-            LinearLayout colorsWrap = (LinearLayout) colorRow;
-            colorsWrap.removeAllViews();
+        eraserToggle.setSelected(binding.imageView.isEraserMode());
+        eraserToggle.setOnClickListener(v -> {
+            boolean next = !binding.imageView.isEraserMode();
+            binding.imageView.setEraserMode(next);
+            v.setSelected(next);
+        });
 
-            for (int color : BRUSH_COLORS) {
-                View swatch = new View(this);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(28), dp(28));
-                lp.rightMargin = dp(10);
-                swatch.setLayoutParams(lp);
-                swatch.setBackground(makeCircleDrawable(color));
-                swatch.setOnClickListener(v -> {
-                    binding.imageView.setBrushColor(color);
-                    binding.imageView.setEraserMode(false);
-                    eraserSwitch.setChecked(false);
-                });
-                colorsWrap.addView(swatch);
-            }
+        int[] palette = new int[]{
+                Color.WHITE,
+                Color.BLACK,
+                Color.RED,
+                Color.GREEN,
+                Color.BLUE,
+                Color.YELLOW,
+                Color.CYAN,
+                Color.MAGENTA
+        };
+
+        for (int color : palette) {
+            View swatch = new View(this);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(28), dp(28));
+            lp.rightMargin = dp(10);
+            swatch.setLayoutParams(lp);
+
+            GradientDrawable bg = new GradientDrawable();
+            bg.setShape(GradientDrawable.OVAL);
+            bg.setColor(color);
+            bg.setStroke(dp(2), Color.WHITE);
+            swatch.setBackground(bg);
+
+            swatch.setOnClickListener(v -> {
+                binding.imageView.setBrushColor(color);
+                binding.imageView.setEraserMode(false);
+                eraserToggle.setSelected(false);
+            });
+
+            colorsRow.addView(swatch);
         }
 
-        btnClearDraw.setOnClickListener(v -> {
-            binding.imageView.clearDrawLayer();
-            Toast.makeText(this, "Слой рисования очищен", Toast.LENGTH_SHORT).show();
+        dialog.show();
+    }
+
+    private void onFiltersClicked() {
+        if (!binding.imageView.hasImage()) {
+            Toast.makeText(this, R.string.pick_first, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (isFilterMode) {
+            applyFilterChanges();
+        } else {
+            enterFilterMode();
+        }
+    }
+
+    private void enterFilterMode() {
+        Bitmap source = binding.imageView.getBaseBitmapCopy();
+        if (source == null) {
+            Toast.makeText(this, "Не удалось открыть фильтры", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        pendingFilterSourceBitmap = source;
+        isFilterMode = true;
+        binding.btnExportTop.setText("Применить");
+        showFilterSheet();
+    }
+
+    private void cancelFilterMode() {
+        isFilterMode = false;
+        pendingFilterSourceBitmap = null;
+        resetFilterState();
+        binding.btnExportTop.setText("Экспорт");
+    }
+
+    private void applyFilterChanges() {
+        if (pendingFilterSourceBitmap == null) {
+            cancelFilterMode();
+            return;
+        }
+
+        pushImageStateToUndo();
+
+        Bitmap filtered = ImageFilterUtils.applyFilters(pendingFilterSourceBitmap, currentFilterState);
+        if (filtered != null) {
+            binding.imageView.replaceBaseBitmap(filtered);
+            redoImageStack.clear();
+        }
+
+        pendingFilterSourceBitmap = null;
+        isFilterMode = false;
+        binding.btnExportTop.setText("Экспорт");
+        Toast.makeText(this, "Фильтр применён", Toast.LENGTH_SHORT).show();
+    }
+
+    private void resetFilterState() {
+        currentFilterState.brightness = 0f;
+        currentFilterState.contrast = 1f;
+        currentFilterState.saturation = 1f;
+        currentFilterState.warmth = 0f;
+        currentFilterState.hue = 0f;
+    }
+
+    private void showFilterSheet() {
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
+        View sheet = LayoutInflater.from(this).inflate(R.layout.sheet_filters, null, false);
+        dialog.setContentView(sheet);
+
+        Slider sliderBrightness = sheet.findViewById(R.id.sliderBrightness);
+        Slider sliderContrast = sheet.findViewById(R.id.sliderContrast);
+        Slider sliderSaturation = sheet.findViewById(R.id.sliderSaturation);
+        Slider sliderWarmth = sheet.findViewById(R.id.sliderWarmth);
+        Slider sliderHue = sheet.findViewById(R.id.sliderHue);
+
+        View presetOriginal = sheet.findViewById(R.id.presetOriginal);
+        View presetWarm = sheet.findViewById(R.id.presetWarm);
+        View presetCold = sheet.findViewById(R.id.presetCold);
+        View presetBw = sheet.findViewById(R.id.presetBw);
+        View presetVivid = sheet.findViewById(R.id.presetVivid);
+
+        syncFilterSliders(
+                sliderBrightness,
+                sliderContrast,
+                sliderSaturation,
+                sliderWarmth,
+                sliderHue
+        );
+
+        Slider.OnChangeListener listener = (slider, value, fromUser) -> {
+            if (isUpdatingFilterControls) return;
+
+            currentFilterState.brightness = sliderBrightness.getValue();
+            currentFilterState.contrast = sliderContrast.getValue();
+            currentFilterState.saturation = sliderSaturation.getValue();
+            currentFilterState.warmth = sliderWarmth.getValue();
+            currentFilterState.hue = sliderHue.getValue();
+
+            applyCurrentFilterPreview();
+        };
+
+        sliderBrightness.addOnChangeListener(listener);
+        sliderContrast.addOnChangeListener(listener);
+        sliderSaturation.addOnChangeListener(listener);
+        sliderWarmth.addOnChangeListener(listener);
+        sliderHue.addOnChangeListener(listener);
+
+        presetOriginal.setOnClickListener(v -> {
+            resetFilterState();
+            syncFilterSliders(sliderBrightness, sliderContrast, sliderSaturation, sliderWarmth, sliderHue);
+            applyCurrentFilterPreview();
         });
 
-        btnCloseDraw.setOnClickListener(v -> {
-            dialog.dismiss();
-            exitDrawMode();
+        presetWarm.setOnClickListener(v -> {
+            currentFilterState.brightness = 10f;
+            currentFilterState.contrast = 1.05f;
+            currentFilterState.saturation = 1.10f;
+            currentFilterState.warmth = 35f;
+            currentFilterState.hue = 0f;
+
+            syncFilterSliders(sliderBrightness, sliderContrast, sliderSaturation, sliderWarmth, sliderHue);
+            applyCurrentFilterPreview();
+        });
+
+        presetCold.setOnClickListener(v -> {
+            currentFilterState.brightness = 0f;
+            currentFilterState.contrast = 1.05f;
+            currentFilterState.saturation = 0.95f;
+            currentFilterState.warmth = -35f;
+            currentFilterState.hue = 0f;
+
+            syncFilterSliders(sliderBrightness, sliderContrast, sliderSaturation, sliderWarmth, sliderHue);
+            applyCurrentFilterPreview();
+        });
+
+        presetBw.setOnClickListener(v -> {
+            currentFilterState.brightness = 0f;
+            currentFilterState.contrast = 1.08f;
+            currentFilterState.saturation = 0f;
+            currentFilterState.warmth = 0f;
+            currentFilterState.hue = 0f;
+
+            syncFilterSliders(sliderBrightness, sliderContrast, sliderSaturation, sliderWarmth, sliderHue);
+            applyCurrentFilterPreview();
+        });
+
+        presetVivid.setOnClickListener(v -> {
+            currentFilterState.brightness = 6f;
+            currentFilterState.contrast = 1.12f;
+            currentFilterState.saturation = 1.25f;
+            currentFilterState.warmth = 8f;
+            currentFilterState.hue = 0f;
+
+            syncFilterSliders(sliderBrightness, sliderContrast, sliderSaturation, sliderWarmth, sliderHue);
+            applyCurrentFilterPreview();
+        });
+
+        dialog.setOnDismissListener(d -> {
+            if (isFilterMode) {
+                applyCurrentFilterPreview();
+            }
         });
 
         dialog.show();
     }
 
-    private android.graphics.drawable.Drawable makeCircleDrawable(int color) {
-        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
-        d.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        d.setColor(color);
-        d.setStroke(dp(1), 0x33FFFFFF);
-        return d;
+    private void syncFilterSliders(
+            Slider brightness,
+            Slider contrast,
+            Slider saturation,
+            Slider warmth,
+            Slider hue
+    ) {
+        isUpdatingFilterControls = true;
+
+        brightness.setValue(currentFilterState.brightness);
+        contrast.setValue(currentFilterState.contrast);
+        saturation.setValue(currentFilterState.saturation);
+        warmth.setValue(currentFilterState.warmth);
+        hue.setValue(currentFilterState.hue);
+
+        isUpdatingFilterControls = false;
+    }
+
+    private void applyCurrentFilterPreview() {
+        if (pendingFilterSourceBitmap == null) return;
+
+        Bitmap filtered = ImageFilterUtils.applyFilters(pendingFilterSourceBitmap, currentFilterState);
+        if (filtered != null) {
+            binding.imageView.replaceBaseBitmap(filtered);
+        }
     }
 
     private void pushImageStateToUndo() {
