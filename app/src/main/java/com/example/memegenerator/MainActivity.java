@@ -13,7 +13,6 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -44,6 +43,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
 
+import android.widget.TextView;
+
 public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
@@ -69,8 +70,6 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap pendingFilterSourceBitmap = null;
 
     private final FilterState currentFilterState = new FilterState();
-
-    // ВАЖНО: блокируем промежуточные apply при программной установке слайдеров
     private boolean isUpdatingFilterControls = false;
 
     @Override
@@ -340,7 +339,9 @@ public class MainActivity extends AppCompatActivity {
                     viewModel.setItemVisible(item.textIndex, !item.visible);
                 }
 
-                refreshLayersAdapter(adapter);
+                if (adapterRef[0] != null) {
+                    refreshLayersAdapter(adapterRef[0]);
+                }
             }
 
             @Override
@@ -349,12 +350,14 @@ public class MainActivity extends AppCompatActivity {
                     binding.imageView.clearBaseImage();
                     updateEmptyState();
                 } else if (item.isDrawLayer()) {
-                    binding.imageView.replaceDrawBitmap(null);
+                    binding.imageView.clearDrawLayer();
                 } else {
                     viewModel.removeItem(item.textIndex);
                 }
 
-                refreshLayersAdapter(adapter);
+                if (adapterRef[0] != null) {
+                    refreshLayersAdapter(adapterRef[0]);
+                }
             }
 
             @Override
@@ -370,7 +373,9 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onMove(int fromPosition, int toPosition) {
-                List<LayerRowItem> rows = adapter.getItems();
+                if (adapterRef[0] == null) return;
+
+                List<LayerRowItem> rows = adapterRef[0].getItems();
                 if (fromPosition < 0 || toPosition < 0 || fromPosition >= rows.size() || toPosition >= rows.size()) {
                     return;
                 }
@@ -380,12 +385,14 @@ public class MainActivity extends AppCompatActivity {
 
                 if (fromItem.isTextLayer() && toItem.isTextLayer()) {
                     viewModel.swapItems(fromItem.textIndex, toItem.textIndex);
-                    refreshLayersAdapter(adapter);
+                    refreshLayersAdapter(adapterRef[0]);
                 }
             }
         });
 
         adapterRef[0] = adapter;
+        recycler.setAdapter(adapter);
+
         recycler.setAdapter(adapter);
 
         ItemTouchHelper touchHelper = new ItemTouchHelper(
@@ -806,31 +813,46 @@ public class MainActivity extends AppCompatActivity {
 
     private void showBrushSettingsSheet() {
         BottomSheetDialog dialog = new BottomSheetDialog(this);
-        View sheet = LayoutInflater.from(this).inflate(R.layout.sheet_brush, null, false);
+        View sheet = LayoutInflater.from(this).inflate(R.layout.sheet_brush_settings, null, false);
         dialog.setContentView(sheet);
 
-        View eraserToggle = sheet.findViewById(R.id.eraserToggle);
+        com.google.android.material.button.MaterialButton eraserToggle =
+                sheet.findViewById(R.id.btnEraserToggle);
         SeekBar brushSize = sheet.findViewById(R.id.brushSizeSeek);
-        LinearLayout colorsRow = sheet.findViewById(R.id.colorsRow);
+        TextView brushSizeValue = sheet.findViewById(R.id.brushSizeValue);
+        LinearLayout colorsRow = sheet.findViewById(R.id.colorPalette);
+        com.google.android.material.button.MaterialButton btnClearDraw =
+                sheet.findViewById(R.id.btnClearDraw);
 
         brushSize.setProgress(18);
+        brushSizeValue.setText("18 px");
+
         brushSize.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 float size = Math.max(2f, progress);
                 binding.imageView.setBrushSizeDp(size);
+                brushSizeValue.setText((int) size + " px");
             }
 
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) { }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) { }
         });
 
-        eraserToggle.setSelected(binding.imageView.isEraserMode());
+        eraserToggle.setText(binding.imageView.isEraserMode()
+                ? "Ластик: включен"
+                : "Ластик: выключен");
+
         eraserToggle.setOnClickListener(v -> {
             boolean next = !binding.imageView.isEraserMode();
             binding.imageView.setEraserMode(next);
-            v.setSelected(next);
+            eraserToggle.setText(next ? "Ластик: включен" : "Ластик: выключен");
         });
+
+        btnClearDraw.setOnClickListener(v -> binding.imageView.clearDrawLayer());
 
         int[] palette = new int[]{
                 Color.WHITE,
@@ -842,6 +864,8 @@ public class MainActivity extends AppCompatActivity {
                 Color.CYAN,
                 Color.MAGENTA
         };
+
+        colorsRow.removeAllViews();
 
         for (int color : palette) {
             View swatch = new View(this);
@@ -858,7 +882,7 @@ public class MainActivity extends AppCompatActivity {
             swatch.setOnClickListener(v -> {
                 binding.imageView.setBrushColor(color);
                 binding.imageView.setEraserMode(false);
-                eraserToggle.setSelected(false);
+                eraserToggle.setText("Ластик: выключен");
             });
 
             colorsRow.addView(swatch);
